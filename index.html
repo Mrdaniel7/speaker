@@ -948,32 +948,147 @@
   <input type="file" id="image-input" accept="image/*" style="display:none" />
 
   <script type="module">
+    const TRANSLATIONS = {
+      'es': {
+        'nav.home': 'Inicio',
+        'nav.library': 'Mi Biblioteca',
+        'nav.settings': 'Configuraciones',
+        'home.banner.title': 'Obtén un resumen rápido de un archivo o pregunta al AI cualquier cosa',
+        'home.banner.button': 'Prueba gratis',
+        'home.section.title': '¿Qué quieres escuchar hoy?',
+        'home.document.title': 'Documento',
+        'home.document.subtitle': 'Sube archivos desde Drive o dispositivo',
+        'home.scan.title': 'Escanear Texto',
+        'home.scan.subtitle': 'Documentos escaneados o imágenes',
+        'home.url.title': 'Enlace Web',
+        'home.url.subtitle': 'Convierte URLs en audio',
+        'home.text.title': 'Escribir o Pegar Texto',
+        'home.text.subtitle': 'Introduce o pega texto para escuchar',
+        'home.email.title': 'Correo',
+        'home.email.subtitle': 'Escucha los correos electrónicos fácilmente',
+        'library.title': 'Mi Biblioteca',
+        'library.tab.all': 'Todo',
+        'library.tab.continue': 'Continuar',
+        'library.tab.finished': 'Finalizado',
+        'library.tab.favorites': 'Favoritos',
+        'settings.title': 'Configuraciones',
+        'settings.language': 'Idioma de la aplicación'
+      },
+      'en': {
+        'nav.home': 'Home',
+        'nav.library': 'My Library',
+        'nav.settings': 'Settings',
+        'home.banner.title': 'Get a quick summary of a file or ask AI anything',
+        'home.banner.button': 'Try for free',
+        'home.section.title': 'What do you want to listen to today?',
+        'home.document.title': 'Document',
+        'home.document.subtitle': 'Upload files from Drive or device',
+        'home.scan.title': 'Scan Text',
+        'home.scan.subtitle': 'Scanned documents or images',
+        'home.url.title': 'Web Link',
+        'home.url.subtitle': 'Convert URLs to audio',
+        'home.text.title': 'Write or Paste Text',
+        'home.text.subtitle': 'Enter or paste text to listen',
+        'home.email.title': 'Email',
+        'home.email.subtitle': 'Listen to emails easily',
+        'library.title': 'My Library',
+        'library.tab.all': 'All',
+        'library.tab.continue': 'Continue',
+        'library.tab.finished': 'Finished',
+        'library.tab.favorites': 'Favorites',
+        'settings.title': 'Settings',
+        'settings.language': 'App Language'
+      },
+      'pt': {
+        'nav.home': 'Início',
+        'nav.library': 'Minha Biblioteca',
+        'nav.settings': 'Configurações',
+        'home.banner.title': 'Obtenha um resumo rápido de um arquivo ou pergunte qualquer coisa à IA',
+        'home.banner.button': 'Experimente grátis',
+        'home.section.title': 'O que você quer ouvir hoje?',
+        'library.title': 'Minha Biblioteca',
+        'settings.title': 'Configurações',
+        'settings.language': 'Idioma do aplicativo'
+      },
+      'fr': {
+        'nav.home': 'Accueil',
+        'nav.library': 'Ma Bibliothèque',
+        'nav.settings': 'Paramètres',
+        'home.banner.title': 'Obtenez un résumé rapide d\'un fichier ou posez n\'importe quelle question à l\'IA',
+        'library.title': 'Ma Bibliothèque',
+        'settings.title': 'Paramètres',
+        'settings.language': 'Langue de l\'application'
+      }
+    };
+
+    let currentLanguage = localStorage.getItem('appLanguage') || 'es';
+
+    function t(key) {
+      return TRANSLATIONS[currentLanguage]?.[key] || TRANSLATIONS['es'][key] || key;
+    }
+
     // --- Utilidades de popups y dependencias ---
     function mostrarPopupExito(mensaje, duracion = 2000) {
       const popup = document.createElement('div');
       popup.className = 'popup-toast success';
-      popup.innerHTML = `<div class="popup-icon">✅</div><p>${mensaje}</p>`;
-
+      popup.style.cssText = `
+        position: fixed;
+        bottom: -100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #34C759;
+        color: #FFF;
+        padding: 16px 24px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 9999;
+        transition: bottom 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        max-width: 90%;
+        font-weight: 500;
+      `;
+      popup.innerHTML = `<span style="font-size: 24px;">✅</span><span>${mensaje}</span>`;
+      
       document.body.appendChild(popup);
-      setTimeout(() => popup.classList.add('show'), 10);
-
+      setTimeout(() => popup.style.bottom = '100px', 10);
+      
       setTimeout(() => {
-        popup.classList.remove('show');
-        setTimeout(() => popup.remove(), 300);
+        popup.style.bottom = '-100px';
+        setTimeout(() => popup.remove(), 400);
       }, duracion);
     }
 
     function mostrarPopupError(mensaje) {
       const popup = document.createElement('div');
       popup.className = 'popup-toast error';
-      popup.innerHTML = `<div class="popup-icon">❌</div><p>${mensaje}</p>`;
-
+      popup.style.cssText = `
+        position: fixed;
+        bottom: -100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #FF3B30;
+        color: #FFF;
+        padding: 16px 24px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        z-index: 9999;
+        transition: bottom 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        max-width: 90%;
+        font-weight: 500;
+      `;
+      popup.innerHTML = `<span style="font-size: 24px;">❌</span><span>${mensaje}</span>`;
+      
       document.body.appendChild(popup);
-      setTimeout(() => popup.classList.add('show'), 10);
-
+      setTimeout(() => popup.style.bottom = '100px', 10);
+      
       setTimeout(() => {
-        popup.classList.remove('show');
-        setTimeout(() => popup.remove(), 300);
+        popup.style.bottom = '-100px';
+        setTimeout(() => popup.remove(), 400);
       }, 3000);
     }
 
@@ -1004,25 +1119,147 @@
       });
     }
 
-    function mostrarPopupInput(titulo, placeholder, onSubmit, onCancel = null) {
+    function actualizarTextos() {
+      // Navegación
+      const navHome = document.querySelector('[data-target="home"] span');
+      const navLibrary = document.querySelector('[data-target="library"] span');
+      const navSettings = document.querySelector('[data-target="settings"] span');
+      if (navHome) navHome.textContent = t('nav.home');
+      if (navLibrary) navLibrary.textContent = t('nav.library');
+      if (navSettings) navSettings.textContent = t('nav.settings');
+      
+      // Banner
+      const bannerText = document.querySelector('.promo-text p');
+      const btnFree = document.querySelector('#btn-free');
+      if (bannerText) bannerText.textContent = t('home.banner.title');
+      if (btnFree) btnFree.textContent = t('home.banner.button');
+      
+      // Título sección
+      const sectionTitle = document.querySelector('.section-header h2');
+      if (sectionTitle) sectionTitle.textContent = t('home.section.title');
+      
+      // Tarjetas
+      const cards = document.querySelectorAll('.tarjeta-acceso');
+      if (cards[0]) {
+        cards[0].querySelector('h3').textContent = t('home.document.title');
+        cards[0].querySelector('p').textContent = t('home.document.subtitle');
+      }
+      if (cards[1]) {
+        cards[1].querySelector('h3').textContent = t('home.scan.title');
+        cards[1].querySelector('p').textContent = t('home.scan.subtitle');
+      }
+      if (cards[2]) {
+        cards[2].querySelector('h3').textContent = t('home.url.title');
+        cards[2].querySelector('p').textContent = t('home.url.subtitle');
+      }
+      if (cards[3]) {
+        cards[3].querySelector('h3').textContent = t('home.text.title');
+        cards[3].querySelector('p').textContent = t('home.text.subtitle');
+      }
+      if (cards[4]) {
+        cards[4].querySelector('h3').textContent = t('home.email.title');
+        cards[4].querySelector('p').textContent = t('home.email.subtitle');
+      }
+      
+      // Biblioteca
+      const libTitle = document.querySelector('.library-header h1');
+      if (libTitle) libTitle.textContent = t('library.title');
+      
+      // Tabs
+      const tabs = document.querySelectorAll('.tab');
+      if (tabs[0]) tabs[0].textContent = t('library.tab.all');
+      if (tabs[1]) tabs[1].textContent = t('library.tab.continue');
+      if (tabs[2]) tabs[2].textContent = t('library.tab.finished');
+      if (tabs[3]) tabs[3].textContent = t('library.tab.favorites');
+      
+      // Configuraciones
+      const settingsTitle = document.querySelector('#settings .settings-page h1');
+      if (!settingsTitle) {
+        const settingsHeader = document.querySelector('#settings');
+        if (settingsHeader) {
+          let h1 = settingsHeader.querySelector('h1');
+          if (!h1) {
+            h1 = document.createElement('h1');
+            settingsHeader.insertBefore(h1, settingsHeader.firstChild);
+          }
+          h1.textContent = t('settings.title');
+        }
+      } else {
+        settingsTitle.textContent = t('settings.title');
+      }
+    }
+
+    function cambiarIdioma(nuevoIdioma) {
+      if (!TRANSLATIONS[nuevoIdioma]) return;
+      
+      currentLanguage = nuevoIdioma;
+      localStorage.setItem('appLanguage', nuevoIdioma);
+      actualizarTextos();
+      
+      mostrarPopupExito('✅ Idioma actualizado');
+    }
+
+    function abrirModalIdiomas() {
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay active';
+      modal.innerHTML = `
+        <div class="modal-idioma" style="display: block;">
+          <header>
+            <button class="btn-volver" onclick="this.closest('.modal-overlay').remove()">‹</button>
+            <h2>${t('settings.language')}</h2>
+          </header>
+          <div class="lista-idiomas" id="language-list"></div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      const languageList = modal.querySelector('#language-list');
+      const idiomas = [
+        { code: 'en', nombre: 'English (US)', flag: '🇺🇸' },
+        { code: 'es', nombre: 'Español', flag: '🇪🇸' },
+        { code: 'pt', nombre: 'Português', flag: '🇧🇷' },
+        { code: 'fr', nombre: 'Français', flag: '🇫🇷' }
+      ];
+      
+      idiomas.forEach(idioma => {
+        const item = document.createElement('div');
+        item.className = 'idioma-item';
+        if (currentLanguage === idioma.code) item.classList.add('activo');
+        
+        item.innerHTML = `
+          <span style="font-size: 32px;">${idioma.flag}</span>
+          <span>${idioma.nombre}</span>
+        `;
+        
+        item.addEventListener('click', () => {
+          cambiarIdioma(idioma.code);
+          modal.remove();
+        });
+        
+        languageList.appendChild(item);
+      });
+    }
+
+    function mostrarPopupInput(titulo, placeholder, onSubmit) {
       const popup = document.createElement('div');
       popup.className = 'modal-overlay active';
       popup.innerHTML = `
-        <div class="popup-input">
-          <h3>${titulo}</h3>
-          <input type="text" placeholder="${placeholder}" id="popup-input-field" />
-          <div class="popup-actions">
-            <button class="btn-cancel">Cancelar</button>
-            <button class="btn-submit">Enviar</button>
+        <div style="background: #FFF; border-radius: 20px; padding: 28px; max-width: 400px; width: 90%; margin: auto; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);">
+          <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; text-align: center;">${titulo}</h3>
+          <input type="text" placeholder="${placeholder}" id="popup-input-field" style="width: 100%; padding: 14px; border: 2px solid #E5E5E5; border-radius: 12px; font-size: 16px; margin-bottom: 20px;" />
+          <div style="display: flex; gap: 12px;">
+            <button class="btn-cancel" style="flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; background: #F5F5F5; color: #666;">Cancelar</button>
+            <button class="btn-submit" style="flex: 1; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #FFB800, #FF9500); color: #FFF;">Enviar</button>
           </div>
         </div>
       `;
-
+      
       document.body.appendChild(popup);
-
+      
       const input = popup.querySelector('#popup-input-field');
       input.focus();
-
+      
       popup.querySelector('.btn-submit').addEventListener('click', () => {
         const value = input.value.trim();
         if (value && onSubmit) {
@@ -1030,19 +1267,16 @@
           popup.remove();
         }
       });
-
+      
       popup.querySelector('.btn-cancel').addEventListener('click', () => {
-        if (onCancel) onCancel();
         popup.remove();
       });
-
+      
       input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           popup.querySelector('.btn-submit').click();
         }
       });
-
-      return popup;
     }
 
     const tesseractScript = document.createElement('script');
@@ -1077,55 +1311,114 @@
       return null;
     }
 
-    async function speakNatural(text, voiceName, rate) {
+    async function speakNatural(texto, vozNombre, velocidad = 1.0) {
       const apiKey = localStorage.getItem('googleTTSKey');
+      
       if (!apiKey) {
-        mostrarPopupConfirmacion(
-          '⚠️ Voces del sistema',
-          'Sin API Key se usarán las voces nativas del navegador (menos naturales).',
-          () => speak(text, voiceName, rate)
-        );
+        console.warn('No API Key disponible');
+        return usarVozNavegador(texto, vozNombre, velocidad);
+      }
+      
+      const vozConfig = VOICE_CONFIG[vozNombre];
+      if (!vozConfig) {
+        console.error('Voz no encontrada');
         return null;
       }
-
-      const voiceMapping = {
-        'Sasha': 'es-ES-Neural2-C',
-        'Selena': 'es-ES-Neural2-A',
-        'Ariel': 'es-ES-Wavenet-B',
-        'Alex': 'es-ES-Wavenet-C',
-        'Sam': 'en-US-Neural2-D',
-        'Robin': 'en-GB-Neural2-C',
-        'Emery': 'en-US-Neural2-F',
-      };
-
-      const voiceId = voiceMapping[voiceName] || 'es-ES-Neural2-A';
-      const langCode = voiceId.substring(0, 5);
-
+      
       try {
-        const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { text: text.substring(0, 5000) },
-            voice: { languageCode: langCode, name: voiceId },
-            audioConfig: { audioEncoding: 'MP3', speakingRate: rate, pitch: 0 },
-          }),
-        });
-
-        if (!response.ok) throw new Error('API Error');
-
+        const response = await fetch(
+          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: { text: texto.substring(0, 5000) },
+              voice: {
+                languageCode: vozConfig.languageCode,
+                name: vozConfig.googleVoice,
+                ssmlGender: vozConfig.gender
+              },
+              audioConfig: {
+                audioEncoding: 'MP3',
+                speakingRate: velocidad,
+                pitch: 0,
+                volumeGainDb: 0,
+                effectsProfileId: ['headphone-class-device']
+              }
+            })
+          }
+        );
+        
+        if (!response.ok) {
+          console.error('Error Google TTS:', response.status);
+          return usarVozNavegador(texto, vozNombre, velocidad);
+        }
+        
         const data = await response.json();
         const audioBlob = base64ToBlob(data.audioContent, 'audio/mp3');
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        audio.play();
+        
         return audio;
+        
       } catch (error) {
-        console.error('Google TTS falló:', error);
-        mostrarPopupError('Error con API de Google. Verifica tu API Key.');
-        return null;
+        console.error('Error síntesis:', error);
+        return usarVozNavegador(texto, vozNombre, velocidad);
       }
     }
+
+    function base64ToBlob(base64, mimeType) {
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      return new Blob([byteArray], { type: mimeType });
+    }
+
+    function usarVozNavegador(texto, vozNombre, velocidad) {
+      return new Promise((resolve) => {
+        const synth = window.speechSynthesis;
+        const utterance = new SpeechSynthesisUtterance(texto);
+        
+        const voices = synth.getVoices();
+        const vozConfig = VOICE_CONFIG[vozNombre];
+        const lang = vozConfig?.languageCode || 'es-ES';
+        
+        let selectedVoice = voices.find(v => v.lang === lang);
+        if (!selectedVoice) {
+          selectedVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
+        }
+        if (!selectedVoice) selectedVoice = voices[0];
+        
+        utterance.voice = selectedVoice;
+        utterance.rate = velocidad;
+        utterance.pitch = 1;
+        
+        const audioMock = {
+          play: () => synth.speak(utterance),
+          pause: () => synth.pause(),
+          paused: false,
+          currentTime: 0,
+          duration: 0,
+          addEventListener: (event, callback) => {
+            if (event === 'ended') utterance.onend = callback;
+            if (event === 'timeupdate') {
+              const interval = setInterval(() => {
+                if (!synth.speaking) {
+                  clearInterval(interval);
+                  if (callback) callback();
+                }
+              }, 100);
+            }
+          }
+        };
+        
+        resolve(audioMock);
+      });
+    }
+
 
     function stop() {
       const synth = window.speechSynthesis;
@@ -1295,15 +1588,66 @@
     let audioDuration = 0;
     let audioElement = null;
 
-    const VOICES_DATA = [
-      { nombre: 'Ariel', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=12' },
-      { nombre: 'Selena', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=45' },
-      { nombre: 'Sasha', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=32' },
-      { nombre: 'Alex', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=33' },
-      { nombre: 'Emery', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=47' },
-      { nombre: 'Sam', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=52' },
-      { nombre: 'Robin', desc: 'Calidad Premium • Multilingüe', avatar: 'https://i.pravatar.cc/150?img=48' },
-    ];
+    const VOICE_CONFIG = {
+      'Sasha': {
+        nombre: 'Sasha',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=32',
+        googleVoice: 'es-ES-Neural2-C',
+        languageCode: 'es-ES',
+        gender: 'FEMALE'
+      },
+      'Selena': {
+        nombre: 'Selena',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=45',
+        googleVoice: 'es-ES-Neural2-A',
+        languageCode: 'es-ES',
+        gender: 'FEMALE'
+      },
+      'Ariel': {
+        nombre: 'Ariel',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=12',
+        googleVoice: 'es-ES-Neural2-D',
+        languageCode: 'es-ES',
+        gender: 'MALE'
+      },
+      'Alex': {
+        nombre: 'Alex',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=33',
+        googleVoice: 'es-ES-Neural2-B',
+        languageCode: 'es-ES',
+        gender: 'MALE'
+      },
+      'Sam': {
+        nombre: 'Sam',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=52',
+        googleVoice: 'en-US-Neural2-D',
+        languageCode: 'en-US',
+        gender: 'MALE'
+      },
+      'Robin': {
+        nombre: 'Robin',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=48',
+        googleVoice: 'en-GB-Neural2-C',
+        languageCode: 'en-GB',
+        gender: 'FEMALE'
+      },
+      'Emery': {
+        nombre: 'Emery',
+        desc: 'Calidad Premium • Multilingüe',
+        avatar: 'https://i.pravatar.cc/150?img=47',
+        googleVoice: 'en-US-Neural2-F',
+        languageCode: 'en-US',
+        gender: 'FEMALE'
+      }
+    };
+
+    const VOICES_DATA = Object.values(VOICE_CONFIG);
 
     const storedClonedVoice = localStorage.getItem('clonedVoice');
     if (storedClonedVoice) {
@@ -1313,19 +1657,6 @@
         console.error('Error cargando voz clonada:', error);
       }
     }
-
-    const IDIOMAS = [
-      { nombre: 'Inglés (EE. UU.)', flag: 'https://flagcdn.com/us.svg' },
-      { nombre: 'Inglés (Reino Unido)', flag: 'https://flagcdn.com/gb.svg' },
-      { nombre: 'Español', flag: 'https://flagcdn.com/es.svg', activo: true },
-      { nombre: 'Brasileño', flag: 'https://flagcdn.com/br.svg' },
-      { nombre: 'Portugués', flag: 'https://flagcdn.com/pt.svg' },
-      { nombre: 'Francés', flag: 'https://flagcdn.com/fr.svg' },
-      { nombre: 'Italiano', flag: 'https://flagcdn.com/it.svg' },
-      { nombre: 'Alemán', flag: 'https://flagcdn.com/de.svg' },
-      { nombre: 'Turco', flag: 'https://flagcdn.com/tr.svg' },
-      { nombre: 'Chino simplificado', flag: 'https://flagcdn.com/cn.svg' },
-    ];
 
     function mostrarPopupAPIKey() {
       const popup = document.createElement('div');
@@ -1533,9 +1864,26 @@
       });
     }
 
-    function previewVoice(name) {
-      const textoDemo = 'Hola, soy ' + name + ' y estoy lista para leer tu texto con voz natural.';
-      speakNatural(textoDemo, name, velocidadActual);
+    async function previewVoice(vozNombre) {
+      const vozConfig = VOICE_CONFIG[vozNombre];
+      
+      const textoDemos = {
+        'es-ES': `Hola, soy ${vozNombre}. Mi voz es natural y clara, perfecta para escuchar tus documentos.`,
+        'en-US': `Hello, I'm ${vozNombre}. My voice is natural and clear, perfect for listening to your documents.`,
+        'en-GB': `Hello, I'm ${vozNombre}. My voice is natural and clear, perfect for listening to your documents.`
+      };
+      
+      const texto = textoDemos[vozConfig.languageCode] || textoDemos['es-ES'];
+      
+      if (window.currentPreviewAudio) {
+        window.currentPreviewAudio.pause();
+      }
+      
+      const audio = await speakNatural(texto, vozNombre, 1.0);
+      if (audio) {
+        window.currentPreviewAudio = audio;
+        audio.play();
+      }
     }
 
     function abrirClonacionVoz() {
@@ -1817,6 +2165,7 @@
       });
 
       audioElement.addEventListener('ended', detenerLectura);
+      audioElement.play();
       playPauseBtn.textContent = '⏸️';
     }
 
@@ -1976,22 +2325,13 @@
     }
 
     async function descargarAudio(doc, apiKey) {
-      const voiceMapping = {
-        'Sasha': 'es-ES-Neural2-C',
-        'Selena': 'es-ES-Neural2-A',
-        'Ariel': 'es-ES-Wavenet-B',
-        'Alex': 'es-ES-Wavenet-C',
-        'Sam': 'en-US-Neural2-D',
-        'Robin': 'en-GB-Neural2-C',
-        'Emery': 'en-US-Neural2-F',
-      };
-      const voiceId = voiceMapping[doc.vozSeleccionada || 'Sasha'] || 'es-ES-Neural2-A';
+      const vozConfig = VOICE_CONFIG[doc.vozSeleccionada || 'Sasha'] || VOICE_CONFIG['Sasha'];
       const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: { text: doc.texto },
-          voice: { languageCode: voiceId.substring(0, 5), name: voiceId },
+          voice: { languageCode: vozConfig.languageCode, name: vozConfig.googleVoice, ssmlGender: vozConfig.gender },
           audioConfig: { audioEncoding: 'MP3', speakingRate: doc.velocidad || 1.0 },
         }),
       });
@@ -2000,13 +2340,6 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `${doc.titulo}.mp3`; a.click();
-    }
-
-    function base64ToBlob(base64, mime) {
-      const byteChars = atob(base64);
-      const byteNumbers = new Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-      return new Blob([new Uint8Array(byteNumbers)], { type: mime });
     }
 
     const cards = document.querySelectorAll('.tarjeta-acceso');
@@ -2202,22 +2535,6 @@
       }
     });
 
-    function renderIdiomas() {
-      const container = document.getElementById('language-list');
-      container.innerHTML = '';
-      IDIOMAS.forEach((idioma) => {
-        const item = document.createElement('div');
-        item.className = 'idioma-item' + (idioma.activo ? ' activo' : '');
-        item.innerHTML = `<img src="${idioma.flag}" alt="${idioma.nombre}" /><span>${idioma.nombre}</span>`;
-        item.addEventListener('click', () => {
-          IDIOMAS.forEach((i) => i.activo = false);
-          idioma.activo = true;
-          renderIdiomas();
-        });
-        container.appendChild(item);
-      });
-    }
-
     requestForm.addEventListener('submit', (e) => {
       e.preventDefault();
       mostrarPopupExito('¡Gracias por tu sugerencia!');
@@ -2229,10 +2546,12 @@
       sendIdea.classList.toggle('activo', ideaInfo.value.length > 0);
     });
 
-    document.querySelectorAll('[data-action="idioma"]').forEach((el) => el.addEventListener('click', () => {
-      renderIdiomas();
-      openModal(languageModal);
-    }));
+    const idiomaBtn = document.querySelector('[data-action="idioma"]');
+    if (idiomaBtn) {
+      idiomaBtn.addEventListener('click', () => {
+        abrirModalIdiomas();
+      });
+    }
 
     document.querySelectorAll('[data-action="solicitar"]').forEach((el) => el.addEventListener('click', () => openModal(requestForm)));
 
@@ -2264,7 +2583,7 @@
       setSpeed(velocidadActual);
       actualizarAvatarVoz(vozSeleccionada);
       renderDocumentos();
-      renderIdiomas();
+      actualizarTextos();
     });
   </script>
 </body>
