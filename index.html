@@ -730,8 +730,8 @@
         <header class="library-header">
           <h1>Mi Biblioteca</h1>
           <div class="lib-icons">
-            <div class="progress-circle" title="Progreso">
-              <span class="circle-text">IA</span>
+            <div class="progress-circle" id="btn-api-status" title="Configurar API Key" style="cursor: pointer; transition: all 0.3s;">
+              <span class="circle-text">🤖</span>
             </div>
             <div class="star-counter">
               ⭐<span>0</span>
@@ -930,7 +930,7 @@
     <div class="lista-idiomas" id="language-list"></div>
   </div>
 
-  <form class="formulario-solicitud" id="request-form">
+  <form class="formulario-solicitud" id="request-form" style="display: none;">
     <header>
       <button class="btn-volver" data-close>‹</button>
       <h2>Solicitar Función</h2>
@@ -1325,30 +1325,41 @@
 
     async function speakNatural(texto, vozNombre, velocidad = 1.0) {
       const apiKey = localStorage.getItem('googleTTSKey');
-
-      // Fallback si no hay API Key
+      
       if (!apiKey) {
         console.warn('⚠️ No API Key - usando voces del navegador');
         return usarVozNavegador(texto, vozNombre, velocidad);
       }
-
+      
       const vozConfig = VOICE_CONFIG[vozNombre];
       if (!vozConfig) {
         console.error('❌ Voz no configurada:', vozNombre);
         return usarVozNavegador(texto, vozNombre, velocidad);
       }
-
+      
       try {
-        // Limitar texto a 5000 caracteres (límite de Google TTS por request)
-        const textoLimitado = texto.substring(0, 5000);
-
+        // Limpiar texto: eliminar caracteres problemáticos
+        let textoLimpio = texto
+          .substring(0, 5000)
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+          .trim();
+        
+        if (!textoLimpio) {
+          throw new Error('Texto vacío después de limpieza');
+        }
+        
+        console.log('📝 Enviando a Google TTS:', textoLimpio.substring(0, 50) + '...');
+        
         const response = await fetch(
           `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
             body: JSON.stringify({
-              input: { text: textoLimitado },
+              input: { text: textoLimpio },
               voice: {
                 languageCode: vozConfig.languageCode,
                 name: vozConfig.googleVoice,
@@ -1356,7 +1367,7 @@
               },
               audioConfig: {
                 audioEncoding: 'MP3',
-                speakingRate: velocidad,
+                speakingRate: Math.max(0.25, Math.min(4.0, velocidad)),
                 pitch: 0.0,
                 volumeGainDb: 0.0,
                 effectsProfileId: ['headphone-class-device']
@@ -1364,33 +1375,39 @@
             })
           }
         );
-
+        
         if (!response.ok) {
-          const errorData = await response.json();
+          const errorData = await response.json().catch(() => ({}));
           console.error('❌ Google TTS Error:', response.status, errorData);
-
-          // Si la API falla, remover key inválida y usar fallback
-          if (response.status === 400 || response.status === 403) {
+          
+          if (response.status === 400) {
+            mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
+          } else if (response.status === 403) {
             localStorage.removeItem('googleTTSKey');
-            mostrarPopupError('API Key inválida. Usando voces del sistema.');
+            mostrarPopupError('API Key sin permisos. Reconfigura.');
+          } else if (response.status === 429) {
+            mostrarPopupError('Límite de cuota excedido.');
           }
-
+          
           return usarVozNavegador(texto, vozNombre, velocidad);
         }
-
+        
         const data = await response.json();
-
-        // Convertir base64 a Blob y crear Audio
+        
+        if (!data.audioContent) {
+          throw new Error('No se recibió audio de Google TTS');
+        }
+        
         const audioBlob = base64ToBlob(data.audioContent, 'audio/mp3');
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-
+        
         console.log('✅ Audio generado con Google TTS Neural2');
         return audio;
-
+        
       } catch (error) {
         console.error('❌ Error en síntesis de voz:', error);
-        mostrarPopupError('Error al generar audio. Usando voces del sistema.');
+        mostrarPopupError(`Error al generar audio: ${error.message}`);
         return usarVozNavegador(texto, vozNombre, velocidad);
       }
     }
@@ -1692,12 +1709,18 @@
 
     const VOICES_DATA = Object.values(VOICE_CONFIG);
 
-    const storedClonedVoice = localStorage.getItem('clonedVoice');
-    if (storedClonedVoice) {
+    // ✅ CARGAR VOZ CLONADA SI EXISTE
+    const clonedVoice = localStorage.getItem('clonedVoice');
+    if (clonedVoice) {
       try {
-        VOICES_DATA.push(JSON.parse(storedClonedVoice));
-      } catch (error) {
-        console.error('Error cargando voz clonada:', error);
+        const voice = JSON.parse(clonedVoice);
+        VOICE_CONFIG[voice.nombre] = voice;
+        if (!VOICES_DATA.find(v => v.nombre === voice.nombre)) {
+          VOICES_DATA.push(voice);
+        }
+        console.log('✅ Voz clonada restaurada:', voice.nombre);
+      } catch (e) {
+        console.error('❌ Error cargando voz clonada:', e);
       }
     }
 
@@ -1802,6 +1825,7 @@
 
         if (isValid) {
           localStorage.setItem('googleTTSKey', apiKey);
+          window.dispatchEvent(new Event('apiKeyUpdated'));
           mostrarPopupExito('✅ API Key configurada correctamente');
           setTimeout(() => {
             popup.remove();
@@ -2083,15 +2107,22 @@
           if (progress >= 100) {
             clearInterval(progressInterval);
 
-            const newVoice = {
-              nombre: 'Mi Voz Clonada',
-              desc: 'Voz personalizada • Tu voz',
-              avatar: 'https://i.pravatar.cc/150?img=68',
-              isCloned: true
-            };
+          const newVoice = {
+            nombre: 'Mi Voz Clonada',
+            desc: 'Voz personalizada • Tu voz',
+            avatar: 'https://i.pravatar.cc/150?img=68',
+            googleVoice: 'es-ES-Neural2-C',
+            languageCode: 'es-ES',
+            gender: 'NEUTRAL',
+            isCloned: true
+          };
 
-            VOICES_DATA.push(newVoice);
-            localStorage.setItem('clonedVoice', JSON.stringify(newVoice));
+          // ✅ Añadir a ambas estructuras
+          VOICE_CONFIG['Mi Voz Clonada'] = newVoice;
+          VOICES_DATA.push(newVoice);
+          localStorage.setItem('clonedVoice', JSON.stringify(newVoice));
+
+          console.log('✅ Voz clonada añadida correctamente');
 
             mostrarPopupExito('✅ ¡Voz clonada creada con éxito!');
             modal.remove();
@@ -2124,9 +2155,16 @@
     function setSpeed(val) {
       velocidadActual = Number(val);
       localStorage.setItem('velocidadActual', velocidadActual);
+      
       speedBtn.textContent = `${velocidadActual.toFixed(1)} x`;
       document.getElementById('velocidad-actual').textContent = `${velocidadActual.toFixed(1)} x`;
       speedSlider.value = velocidadActual;
+      
+      if (audioElement && audioElement.playbackRate !== undefined) {
+        audioElement.playbackRate = velocidadActual;
+      }
+      
+      console.log('⚡ Velocidad:', velocidadActual);
     }
 
     speedBtn.addEventListener('click', () => openModal(speedModal));
@@ -2204,59 +2242,117 @@
     }
 
     async function iniciarLectura() {
-      if (!documentoActivo) return;
-      audioElement && audioElement.pause();
+      if (!documentoActivo) {
+        console.error('❌ No hay documento activo');
+        return;
+      }
+      
+      console.log('▶️ Iniciando lectura:', documentoActivo.titulo);
+      
+      if (audioElement) {
+        audioElement.pause();
+        audioElement = null;
+      }
+      
+      const palabras = documentoActivo.texto.split(/\s+/).filter(p => p.trim());
+      palabrasTotales = palabras.length;
+      
+      playerText.innerHTML = palabras.map((palabra, idx) => 
+        `<span class="palabra" data-index="${idx}">${palabra}</span>`
+      ).join(' ');
+      
+      console.log(`📝 ${palabrasTotales} palabras preparadas`);
+      
       audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual);
-      if (!audioElement) return;
-
-      const palabras = document.querySelectorAll('.palabra');
+      
+      if (!audioElement) {
+        mostrarPopupError('No se pudo generar el audio');
+        return;
+      }
+      
+      audioElement.addEventListener('loadedmetadata', () => {
+        console.log(`⏱️ Duración: ${formatTime(audioElement.duration)}`);
+        timeEnd.textContent = formatTime(audioElement.duration);
+      });
+      
       audioElement.addEventListener('timeupdate', () => {
         if (!audioElement.duration) return;
-        const porcentaje = audioElement.currentTime / audioElement.duration;
+        
+        const currentTime = audioElement.currentTime;
+        const duration = audioElement.duration;
+        const porcentaje = currentTime / duration;
+        
         progress.style.width = `${porcentaje * 100}%`;
         progressThumb.style.left = `${porcentaje * 100}%`;
-        timeStart.textContent = formatTime(audioElement.currentTime);
-        timeEnd.textContent = formatTime(audioElement.duration);
-        const palabraActual = Math.floor(palabrasTotales * porcentaje);
-        palabras.forEach((el, idx) => {
-          const active = idx === palabraActual;
-          el.classList.toggle('resaltado', active);
-          if (active) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        timeStart.textContent = formatTime(currentTime);
+        timeEnd.textContent = formatTime(duration);
+        
+        const palabraActualIndex = Math.floor(palabrasTotales * porcentaje);
+        const palabrasElements = document.querySelectorAll('.palabra');
+        
+        palabrasElements.forEach((el, idx) => {
+          if (idx === palabraActualIndex && !el.classList.contains('resaltado')) {
+            document.querySelectorAll('.palabra.resaltado').forEach(p => p.classList.remove('resaltado'));
+            el.classList.add('resaltado');
+            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          }
         });
       });
-
-      audioElement.addEventListener('ended', detenerLectura);
-      audioElement.play();
-      playPauseBtn.textContent = '⏸️';
+      
+      audioElement.addEventListener('ended', () => {
+        console.log('✅ Reproducción finalizada');
+        detenerLectura();
+      });
+      
+      try {
+        await audioElement.play();
+        playPauseBtn.textContent = '⏸️';
+        console.log('✅ Reproducción iniciada');
+      } catch (error) {
+        console.error('❌ Error al reproducir:', error);
+        mostrarPopupError('Error al reproducir el audio');
+      }
     }
 
     function detenerLectura() {
       if (audioElement) {
         audioElement.pause();
-        audioElement = null;
+        audioElement.currentTime = 0;
       }
-      stop();
       playPauseBtn.textContent = '▶️';
+      document.querySelectorAll('.palabra.resaltado').forEach(p => p.classList.remove('resaltado'));
+      console.log('⏹️ Reproducción detenida');
     }
 
     playPauseBtn.addEventListener('click', () => {
-      if (!documentoActivo) return;
-      if (audioElement && !audioElement.paused) {
-        audioElement.pause();
-        playPauseBtn.textContent = '▶️';
-      } else if (audioElement && audioElement.paused) {
+      if (!documentoActivo) {
+        mostrarPopupError('No hay documento cargado');
+        return;
+      }
+      
+      if (!audioElement) {
+        iniciarLectura();
+      } else if (audioElement.paused) {
         audioElement.play();
         playPauseBtn.textContent = '⏸️';
+        console.log('▶️ Reanudando');
       } else {
-        iniciarLectura();
+        audioElement.pause();
+        playPauseBtn.textContent = '▶️';
+        console.log('⏸️ Pausando');
       }
     });
 
     backBtn.addEventListener('click', () => {
-      if (audioElement) audioElement.currentTime = Math.max(0, audioElement.currentTime - 10);
+      if (!audioElement) return;
+      audioElement.currentTime = Math.max(0, audioElement.currentTime - 10);
+      console.log('⏪ -10s');
     });
+
     forwardBtn.addEventListener('click', () => {
-      if (audioElement) audioElement.currentTime = Math.min(audioElement.duration || 0, audioElement.currentTime + 10);
+      if (!audioElement) return;
+      audioElement.currentTime = Math.min(audioElement.duration || 0, audioElement.currentTime + 10);
+      console.log('⏩ +10s');
     });
 
     progressBar.addEventListener('click', (e) => {
@@ -2265,6 +2361,7 @@
       const clickX = e.clientX - rect.left;
       const porcentaje = clickX / rect.width;
       audioElement.currentTime = porcentaje * audioElement.duration;
+      console.log(`⏩ Salto a ${formatTime(audioElement.currentTime)}`);
     });
 
     let isDragging = false;
@@ -2272,6 +2369,7 @@
       isDragging = true;
       e.preventDefault();
     });
+
     document.addEventListener('mousemove', (e) => {
       if (!isDragging || !audioElement || !audioElement.duration) return;
       const rect = progressBar.getBoundingClientRect();
@@ -2280,6 +2378,7 @@
       const porcentaje = x / rect.width;
       audioElement.currentTime = porcentaje * audioElement.duration;
     });
+
     document.addEventListener('mouseup', () => {
       isDragging = false;
     });
@@ -2621,6 +2720,10 @@
     }));
 
     window.addEventListener('DOMContentLoaded', async () => {
+      // ✅ FORZAR PÁGINA INICIAL
+      switchPage('home');
+      console.log('✅ Página inicial: home');
+
       const storedKey = localStorage.getItem('googleTTSKey');
 
       if (!storedKey) {
@@ -2631,6 +2734,38 @@
           localStorage.removeItem('googleTTSKey');
           mostrarPopupAPIKey();
         }
+      }
+
+      // ✅ BOTÓN DE API KEY EN HEADER
+      const btnApiStatus = document.getElementById('btn-api-status');
+      if (btnApiStatus) {
+
+        function actualizarEstadoAPI() {
+          const apiKey = localStorage.getItem('googleTTSKey');
+          const icon = btnApiStatus.querySelector('.circle-text');
+
+          if (apiKey) {
+            btnApiStatus.style.borderColor = '#34C759';
+            btnApiStatus.style.background = '#E8F9EE';
+            icon.textContent = '✓';
+            icon.style.color = '#34C759';
+            btnApiStatus.title = 'API Key configurada ✓';
+          } else {
+            btnApiStatus.style.borderColor = '#FF3B30';
+            btnApiStatus.style.background = '#FFEBEA';
+            icon.textContent = '⚠';
+            icon.style.color = '#FF3B30';
+            btnApiStatus.title = 'Configurar API Key';
+          }
+        }
+
+        btnApiStatus.addEventListener('click', () => {
+          console.log('🔑 Abriendo configuración de API Key');
+          mostrarPopupAPIKey();
+        });
+
+        actualizarEstadoAPI();
+        window.addEventListener('apiKeyUpdated', actualizarEstadoAPI);
       }
 
       loadVoices(() => renderVoices());
