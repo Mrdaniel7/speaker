@@ -1323,6 +1323,25 @@
       return null;
     }
 
+    function dividirEnChunks(texto, limite = 4800) {
+      const palabras = texto.split(/\s+/);
+      const chunks = [];
+      let actual = '';
+
+      palabras.forEach((palabra) => {
+        const candidato = actual ? `${actual} ${palabra}` : palabra;
+        if (candidato.length > limite) {
+          chunks.push(actual.trim());
+          actual = palabra;
+        } else {
+          actual = candidato;
+        }
+      });
+
+      if (actual.trim()) chunks.push(actual.trim());
+      return chunks;
+    }
+
     async function speakNatural(texto, vozNombre, velocidad = 1.0) {
       const apiKey = localStorage.getItem('googleTTSKey');
       
@@ -1338,70 +1357,76 @@
       }
       
       try {
-        // Limpiar texto: eliminar caracteres problemáticos
-        let textoLimpio = texto
-          .substring(0, 5000)
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-          .trim();
-        
-        if (!textoLimpio) {
+        const chunks = dividirEnChunks(
+          texto.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
+        );
+
+        if (!chunks.length) {
           throw new Error('Texto vacío después de limpieza');
         }
-        
-        console.log('📝 Enviando a Google TTS:', textoLimpio.substring(0, 50) + '...');
-        
-        const response = await fetch(
-          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-              input: { text: textoLimpio },
-              voice: {
-                languageCode: vozConfig.languageCode,
-                name: vozConfig.googleVoice,
-                ssmlGender: vozConfig.gender
+
+        const audioBuffers = [];
+
+        for (const parte of chunks) {
+          console.log('📝 Enviando a Google TTS:', parte.substring(0, 50) + '...');
+
+          const response = await fetch(
+            `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
               },
-              audioConfig: {
-                audioEncoding: 'MP3',
-                speakingRate: Math.max(0.25, Math.min(4.0, velocidad)),
-                pitch: 0.0,
-                volumeGainDb: 0.0,
-                effectsProfileId: ['headphone-class-device']
-              }
-            })
+              body: JSON.stringify({
+                input: { text: parte },
+                voice: {
+                  languageCode: vozConfig.languageCode,
+                  name: vozConfig.googleVoice,
+                  ssmlGender: vozConfig.gender
+                },
+                audioConfig: {
+                  audioEncoding: 'MP3',
+                  speakingRate: Math.max(0.25, Math.min(4.0, velocidad)),
+                  pitch: 0.0,
+                  volumeGainDb: 0.0,
+                  effectsProfileId: ['headphone-class-device']
+                }
+              })
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('❌ Google TTS Error:', response.status, errorData);
+
+            if (response.status === 400) {
+              mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
+            } else if (response.status === 403) {
+              localStorage.removeItem('googleTTSKey');
+              mostrarPopupError('API Key sin permisos. Reconfigura.');
+            } else if (response.status === 429) {
+              mostrarPopupError('Límite de cuota excedido.');
+            }
+
+            return usarVozNavegador(texto, vozNombre, velocidad);
           }
-        );
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('❌ Google TTS Error:', response.status, errorData);
-          
-          if (response.status === 400) {
-            mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
-          } else if (response.status === 403) {
-            localStorage.removeItem('googleTTSKey');
-            mostrarPopupError('API Key sin permisos. Reconfigura.');
-          } else if (response.status === 429) {
-            mostrarPopupError('Límite de cuota excedido.');
+
+          const data = await response.json();
+
+          if (!data.audioContent) {
+            throw new Error('No se recibió audio de Google TTS');
           }
-          
-          return usarVozNavegador(texto, vozNombre, velocidad);
+
+          audioBuffers.push(base64ToBlob(data.audioContent, 'audio/mp3'));
         }
-        
-        const data = await response.json();
-        
-        if (!data.audioContent) {
-          throw new Error('No se recibió audio de Google TTS');
-        }
-        
-        const audioBlob = base64ToBlob(data.audioContent, 'audio/mp3');
+
+        const audioBlob = new Blob(audioBuffers, { type: 'audio/mp3' });
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        
+
+        audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+
         console.log('✅ Audio generado con Google TTS Neural2');
         return audio;
         
@@ -1433,14 +1458,9 @@
         const vozConfig = VOICE_CONFIG[vozNombre];
         const lang = vozConfig?.languageCode || 'es-ES';
 
-        // Buscar voz compatible
         let selectedVoice = voices.find(v => v.lang === lang);
-        if (!selectedVoice) {
-          selectedVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-        }
-        if (!selectedVoice) {
-          selectedVoice = voices[0];
-        }
+        if (!selectedVoice) selectedVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
+        if (!selectedVoice) selectedVoice = voices[0];
 
         utterance.voice = selectedVoice;
         utterance.rate = velocidad;
@@ -1449,28 +1469,35 @@
 
         console.log('🔊 Usando voz del navegador:', selectedVoice?.name);
 
-        // Crear objeto compatible con Audio API
+        const duracionEstimada = calcularDuracion(texto);
+        let startTime = 0;
+        let intervaloProgreso;
+
         const audioMock = {
-          play: () => {
-            synth.cancel(); // Cancelar cualquier reproducción previa
-            synth.speak(utterance);
-          },
-          pause: () => synth.pause(),
-          paused: false,
+          paused: true,
           currentTime: 0,
-          duration: 0,
+          duration: duracionEstimada,
+          play: () => {
+            synth.cancel();
+            startTime = performance.now();
+            audioMock.paused = false;
+            synth.speak(utterance);
+            intervaloProgreso = setInterval(() => {
+              const elapsed = (performance.now() - startTime) / 1000;
+              audioMock.currentTime = Math.min(elapsed, duracionEstimada);
+              audioMock._timeupdate?.forEach(cb => cb());
+              if (!synth.speaking) clearInterval(intervaloProgreso);
+            }, 250);
+          },
+          pause: () => {
+            synth.pause();
+            audioMock.paused = true;
+          },
           addEventListener: (event, callback) => {
-            if (event === 'ended') {
-              utterance.onend = callback;
-            }
+            if (event === 'ended') utterance.onend = callback;
             if (event === 'timeupdate') {
-              // Simular timeupdate para compatibilidad
-              const interval = setInterval(() => {
-                if (!synth.speaking) {
-                  clearInterval(interval);
-                  if (callback) callback();
-                }
-              }, 100);
+              audioMock._timeupdate = audioMock._timeupdate || [];
+              audioMock._timeupdate.push(callback);
             }
           }
         };
@@ -1545,7 +1572,7 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const store = tx.objectStore('documentos');
-      return store.add({
+      const req = store.add({
         ...doc,
         fecha: new Date().toISOString(),
         estado: 'todo',
@@ -1554,15 +1581,20 @@
         vozSeleccionada: doc.vozSeleccionada || 'Sasha',
         velocidad: doc.velocidad || 1.0,
       });
+      return new Promise((resolve, reject) => {
+        req.onsuccess = () => tx.oncomplete = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
     }
 
     async function getDocumentos() {
       const db = await openDB();
       const tx = db.transaction('documentos', 'readonly');
       const store = tx.objectStore('documentos');
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         const req = store.getAll();
         req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
       });
     }
 
@@ -1570,18 +1602,27 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const store = tx.objectStore('documentos');
-      const current = await new Promise((resolve) => {
+      const current = await new Promise((resolve, reject) => {
         const req = store.get(id);
         req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
       });
       if (!current) return;
-      store.put({ ...current, ...updates });
+      const putReq = store.put({ ...current, ...updates });
+      return new Promise((resolve, reject) => {
+        putReq.onsuccess = () => tx.oncomplete = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      });
     }
 
     async function deleteDocumento(id) {
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
-      tx.objectStore('documentos').delete(id);
+      const delReq = tx.objectStore('documentos').delete(id);
+      return new Promise((resolve, reject) => {
+        delReq.onsuccess = () => tx.oncomplete = () => resolve();
+        delReq.onerror = () => reject(delReq.error);
+      });
     }
 
     async function getDocumento(id) {
@@ -1647,6 +1688,7 @@
     let notas = {};
     let audioDuration = 0;
     let audioElement = null;
+    let audioObjectUrl = null;
 
     const VOICE_CONFIG = {
       'Sasha': {
@@ -2250,7 +2292,11 @@
       console.log('▶️ Iniciando lectura:', documentoActivo.titulo);
       
       if (audioElement) {
-        audioElement.pause();
+        try { audioElement.pause(); } catch (e) {}
+        if (audioObjectUrl) {
+          URL.revokeObjectURL(audioObjectUrl);
+          audioObjectUrl = null;
+        }
         audioElement = null;
       }
       
@@ -2264,6 +2310,10 @@
       console.log(`📝 ${palabrasTotales} palabras preparadas`);
       
       audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual);
+
+      if (audioElement?.src?.startsWith('blob:')) {
+        audioObjectUrl = audioElement.src;
+      }
       
       if (!audioElement) {
         mostrarPopupError('No se pudo generar el audio');
@@ -2318,6 +2368,10 @@
       if (audioElement) {
         audioElement.pause();
         audioElement.currentTime = 0;
+        if (audioObjectUrl) {
+          URL.revokeObjectURL(audioObjectUrl);
+          audioObjectUrl = null;
+        }
       }
       playPauseBtn.textContent = '▶️';
       document.querySelectorAll('.palabra.resaltado').forEach(p => p.classList.remove('resaltado'));
