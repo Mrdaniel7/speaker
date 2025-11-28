@@ -16,12 +16,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --amarillo-principal: #FFA500;
+      --amarillo-principal: #FFB800;
       --amarillo-dorado: #FFB800;
       --naranja-botones: #FF9500;
       --fondo-blanco: #FFFFFF;
       --fondo-gris-claro: #F5F5F5;
-      --fondo-rosa-pastel: linear-gradient(180deg, #FFE4E1 0%, #FFDAB9 100%);
+      --fondo-rosa-pastel: linear-gradient(180deg, #FFE8E6 0%, #FFDAB9 100%);
       --texto-negro: #1A1A1A;
       --texto-gris: #666666;
       --texto-gris-claro: #999999;
@@ -32,31 +32,41 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--fondo-gris-claro); color: var(--texto-negro); }
+    body { background: var(--fondo-rosa-pastel); color: var(--texto-negro); }
     #app { min-height: 100vh; padding-bottom: 80px; }
 
     .page { display: none; padding: 16px; }
     .page.active { display: block; }
 
     .promo-banner {
-      background: var(--fondo-rosa-pastel);
-      border-radius: 16px;
+      background: linear-gradient(135deg, #FFF6F2, #FFE7D1);
+      border-radius: 20px;
       padding: 20px;
-      height: 180px;
+      min-height: 190px;
       position: relative;
-      box-shadow: 0 2px 10px var(--sombra-suave);
+      box-shadow: 0 6px 18px rgba(255, 149, 0, 0.15);
+      overflow: hidden;
+    }
+    .promo-illustration {
+      position: absolute;
+      inset: 0;
     }
     .btn-secondary {
       position: absolute;
       top: 16px;
       right: 16px;
       background: #fff;
-      border: none;
+      border: 1px solid #FFE0B2;
       border-radius: 20px;
       padding: 10px 20px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
+      color: var(--texto-negro);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.06);
     }
+    .carousel-dots { position: absolute; bottom: 16px; left: 20px; display: flex; gap: 6px; }
+    .carousel-dots span { width: 8px; height: 8px; border-radius: 50%; background: #FFD9A0; opacity: 0.5; }
+    .carousel-dots span.active { width: 18px; border-radius: 10px; opacity: 1; background: var(--naranja-botones); }
     .section-header h2 { font-size: 22px; font-weight: 700; margin: 24px 0 16px; }
     .access-cards { display: flex; flex-direction: column; gap: 12px; }
     .tarjeta-acceso {
@@ -81,23 +91,27 @@
     .tarjeta-acceso h3 { font-size: 17px; font-weight: 600; }
     .tarjeta-acceso p { font-size: 14px; color: var(--texto-gris); }
 
-    .library-header { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; }
-    .library-header h1 { font-size: 32px; font-weight: 700; margin-left: 4px; }
+    .library-header { display: flex; align-items: center; justify-content: space-between; margin: 16px 0; gap: 12px; }
+    .lib-left { display: flex; align-items: center; gap: 12px; }
+    .ai-chip { width: 44px; height: 44px; border-radius: 14px; background: #E7F1FF; color: #2F80ED; display: grid; place-items: center; font-weight: 800; box-shadow: 0 4px 10px rgba(91,163,245,0.25); }
+    .library-header h1 { font-size: 30px; font-weight: 800; margin-left: 4px; }
     .lib-icons { display: flex; gap: 10px; align-items: center; }
-    .progress-circle { width: 40px; height: 40px; border-radius: 50%; border: 4px solid var(--azul-icono); display: grid; place-items: center; }
+    .badge-pro { background: linear-gradient(120deg, #FFD166, #FFB800); color: #7A4B00; padding: 6px 10px; border-radius: 12px; font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(255, 184, 0, 0.25); }
+    .progress-circle { width: 42px; height: 42px; border-radius: 50%; border: 3px solid var(--azul-icono); display: grid; place-items: center; background: #fff; }
     .circle-text { color: var(--azul-icono); font-weight: 700; }
-    .star-counter { background: #FFF3E0; padding: 6px 10px; border-radius: 12px; color: var(--amarillo-principal); font-weight: 700; }
+    .star-counter { background: #FFF3E0; padding: 6px 10px; border-radius: 12px; color: var(--amarillo-principal); font-weight: 700; border: 1px solid #FFE0B2; }
 
     .tabs { display: flex; gap: 8px; margin: 16px 0; overflow-x: auto; }
     .tab { border: none; padding: 10px 20px; border-radius: 24px; background: #F0F0F0; color: var(--texto-gris); font-weight: 600; cursor: pointer; }
     .tab.active { background: var(--texto-negro); color: #fff; }
 
     #document-list { display: flex; flex-direction: column; gap: 12px; }
-    .documento-item { background: #fff; border-radius: 14px; padding: 10px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .documento-item .miniatura { width: 60px; height: 60px; border-radius: 8px; background: #eee; display: grid; place-items: center; font-size: 24px; }
-    .documento-item h3 { font-size: 16px; font-weight: 600; color: var(--texto-negro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .documento-item .meta { font-size: 13px; color: var(--texto-gris-claro); }
-    .menu-puntos { margin-left: auto; border: none; background: transparent; font-size: 24px; color: var(--texto-gris-claro); cursor: pointer; }
+    .documento-item { background: #fff; border-radius: 14px; padding: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #FFE0B2; }
+    .documento-item .miniatura { width: 64px; height: 64px; border-radius: 12px; background: #fff3e0; display: grid; place-items: center; font-size: 24px; color: var(--naranja-botones); overflow: hidden; box-shadow: inset 0 0 0 1px #FFE0B2; }
+    .documento-item h3 { font-size: 16px; font-weight: 700; color: var(--texto-negro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .documento-item .meta { font-size: 13px; color: var(--texto-gris); margin-top: 4px; display: flex; gap: 8px; align-items: center; }
+    .documento-item .meta span { background: #F9F9F9; padding: 4px 8px; border-radius: 10px; border: 1px solid #EEE; }
+    .menu-puntos { margin-left: auto; border: none; background: transparent; font-size: 24px; color: var(--texto-gris); cursor: pointer; padding: 8px; }
 
     .player-toolbar { height: 56px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; position: sticky; top: 0; }
     .icon-btn { width: 40px; height: 40px; border: none; background: transparent; font-size: 20px; cursor: pointer; }
@@ -132,17 +146,18 @@
 
     .fab { position: fixed; bottom: 84px; right: 24px; width: 64px; height: 64px; border-radius: 50%; border: none; background: linear-gradient(180deg, var(--amarillo-dorado), var(--naranja-botones)); color: #fff; font-size: 32px; box-shadow: 0 4px 16px rgba(255,165,0,0.4); cursor: pointer; z-index: 10; }
 
-    .settings-page { padding: 16px; }
-    .config-seccion { background: #fff; border-radius: 16px; margin-bottom: 18px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .settings-page { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .config-seccion { background: #fff; border-radius: 16px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #FFE0B2; }
     .titulo-seccion { font-size: 14px; color: #999; text-transform: uppercase; margin: 12px 0 6px 12px; letter-spacing: 0.5px; }
-    .config-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid var(--borde-gris); cursor: pointer; }
+    .config-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-top: 1px solid var(--borde-gris); cursor: pointer; transition: background 0.2s; }
+    .config-item:hover { background: #FFF8EC; }
     .config-item:first-of-type { border-top: none; }
-    .icono-config { width: 40px; height: 40px; border-radius: 50%; background: #f0f0f0; display: grid; place-items: center; }
-    .config-item span { font-size: 16px; font-weight: 500; }
-    .valor-actual, .flecha { margin-left: auto; color: #999; font-size: 14px; }
-    .cuenta-item { display: flex; align-items: center; gap: 10px; padding: 12px; }
+    .icono-config { width: 42px; height: 42px; border-radius: 50%; background: #FFF3E0; display: grid; place-items: center; font-size: 18px; color: var(--naranja-botones); box-shadow: inset 0 0 0 1px #FFE0B2; }
+    .config-item span { font-size: 16px; font-weight: 600; }
+    .valor-actual, .flecha { margin-left: auto; color: #666; font-size: 14px; font-weight: 600; }
+    .cuenta-item { display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--borde-gris); }
     .icono-servicio { width: 28px; height: 28px; }
-    .btn-desconectar { margin-left: auto; background: #FF3B30; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-desconectar { margin-left: auto; background: #FF3B30; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 12px rgba(255,59,48,0.22); }
     .descripcion-cuenta { color: var(--texto-gris); font-size: 14px; padding: 0 12px 12px; }
 
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 30; }
@@ -153,43 +168,47 @@
     .modal-header h3 { font-size: 22px; font-weight: 700; }
     .btn-cerrar, .btn-info { background: none; border: none; font-size: 20px; cursor: pointer; }
     .lista-voces { display: flex; flex-direction: column; gap: 12px; }
-    .voz-card { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 16px; background: #FAFAFA; border: 3px solid transparent; }
-    .voz-card.activa { border-color: var(--amarillo-principal); background: #fff; }
-    .avatar-circular { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
+    .voz-card { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 16px; background: linear-gradient(180deg, #FFFDFC, #FFF6EA); border: 2.5px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
+    .voz-card.activa { border-color: var(--amarillo-dorado); box-shadow: 0 6px 16px rgba(255,184,0,0.18); }
+    .avatar-circular { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid #FFE0B2; }
     .avatar-circular img { width: 100%; height: 100%; object-fit: cover; }
-    .info-voz h4 { font-size: 17px; font-weight: 600; }
-    .info-voz p { font-size: 13px; color: var(--texto-gris); }
-    .onda-sonido { color: #ccc; letter-spacing: 1px; }
-    .btn-play { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: #FFF3E0; border: none; cursor: pointer; font-size: 18px; }
-    .btn-guardar { width: calc(100% - 40px); height: 54px; background: #1A1A1A; color: #fff; border: none; border-radius: 27px; font-size: 18px; font-weight: 600; position: sticky; bottom: 20px; margin: 20px auto 0; display: block; }
+    .info-voz h4 { font-size: 17px; font-weight: 700; }
+    .info-voz p { font-size: 13px; color: var(--texto-gris); margin-top: 2px; }
+    .onda-sonido { color: #FFC766; letter-spacing: 1px; margin-top: 4px; font-weight: 700; }
+    .btn-play { margin-left: auto; width: 42px; height: 42px; border-radius: 50%; background: var(--amarillo-principal); border: none; cursor: pointer; font-size: 18px; color: #fff; box-shadow: 0 6px 14px rgba(255,184,0,0.35); }
+    .btn-guardar { width: calc(100% - 40px); height: 54px; background: #1A1A1A; color: #fff; border: none; border-radius: 27px; font-size: 18px; font-weight: 700; position: sticky; bottom: 20px; margin: 20px auto 0; display: block; box-shadow: 0 10px 24px rgba(0,0,0,0.18); }
 
-    .modal-velocidad { bottom: 0; background: #fff; border-radius: 24px 24px 0 0; padding: 24px 20px; max-height: 70vh; }
-    .velocidad-actual { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .modal-velocidad { bottom: 0; background: #fff; border-radius: 24px 24px 0 0; padding: 24px 20px; max-height: 70vh; box-shadow: 0 -8px 24px rgba(0,0,0,0.08); }
+    .velocidad-actual { font-size: 26px; font-weight: 800; margin-bottom: 12px; text-align: center; }
     .slider-velocidad { width: 100%; accent-color: var(--naranja-botones); }
-    .marcas-velocidad { display: flex; justify-content: space-between; color: var(--texto-gris); margin-top: 6px; }
+    .marcas-velocidad { display: flex; justify-content: space-between; color: var(--texto-gris); margin-top: 6px; font-weight: 600; }
     .velocidades-rapidas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .velocidades-rapidas button { padding: 10px 14px; border-radius: 16px; border: 1px solid var(--borde-gris); background: #fff; cursor: pointer; font-weight: 600; }
+    .velocidades-rapidas button { padding: 10px 14px; border-radius: 16px; border: 1px solid #FFE0B2; background: #FFF8EC; cursor: pointer; font-weight: 700; color: var(--texto-negro); min-width: 64px; }
 
-    .modal-documento { top: 10%; bottom: 10%; margin: 0 14px; background: #fff; border-radius: 18px; padding: 16px; overflow-y: auto; }
-    .header-menu { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--borde-gris); padding-bottom: 10px; }
-    .preview-mini { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; background: #eee; }
+    .modal-documento { top: 8%; bottom: 8%; margin: 0 14px; background: #fff; border-radius: 18px; padding: 16px; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+    .header-menu { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--borde-gris); padding-bottom: 10px; }
+    .header-menu .acciones { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .btn-editar { background: #FFF3E0; border: 1px solid #FFE0B2; border-radius: 10px; padding: 8px 10px; cursor: pointer; font-weight: 700; }
+    .preview-mini { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; background: #fff3e0; box-shadow: inset 0 0 0 1px #FFE0B2; }
     .opciones-menu { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
-    .opciones-menu button { text-align: left; padding: 12px; border-radius: 12px; border: 1px solid var(--borde-gris); background: #fff; cursor: pointer; display: flex; gap: 10px; align-items: center; }
+    .opciones-menu button { text-align: left; padding: 12px; border-radius: 12px; border: 1px solid var(--borde-gris); background: #fff; cursor: pointer; display: flex; gap: 10px; align-items: center; font-weight: 600; }
+    .opciones-menu button p { margin: 4px 0 0; color: var(--texto-gris); font-weight: 500; }
     .opciones-menu .eliminar { color: #FF3B30; border-color: #FFD1CF; }
     .opciones-menu .separador { height: 1px; background: var(--borde-gris); margin: 6px 0; }
 
-    .modal-notas { top: 8%; bottom: 8%; margin: 0 14px; background: #fff; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    .modal-notas h2 { font-size: 20px; font-weight: 700; text-align: center; }
+    .modal-notas { top: 8%; bottom: 8%; margin: 0 14px; background: #fff; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); position: relative; }
+    .modal-notas h2 { font-size: 20px; font-weight: 800; text-align: center; }
+    .contenido-vacio { display: grid; place-items: center; gap: 8px; text-align: center; color: var(--texto-gris); }
     .modal-notas textarea { width: 100%; min-height: 160px; border: 1px solid var(--borde-gris); border-radius: 12px; padding: 12px; font-size: 16px; }
-    .btn-fab-nota { align-self: center; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--naranja-botones); color: #fff; font-size: 28px; box-shadow: 0 4px 12px rgba(255,165,0,0.3); cursor: pointer; }
+    .btn-fab-nota { align-self: center; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--amarillo-principal); color: #fff; font-size: 28px; box-shadow: 0 6px 16px rgba(255,184,0,0.35); cursor: pointer; position: sticky; bottom: 12px; }
 
     .modal-idioma { top: 0; bottom: 0; background: #fff; padding: 16px; overflow-y: auto; }
     .modal-idioma header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .modal-idioma h2 { font-size: 20px; font-weight: 700; }
+    .modal-idioma h2 { font-size: 20px; font-weight: 800; }
     .lista-idiomas { display: flex; flex-direction: column; gap: 10px; }
-    .idioma-item { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--borde-gris); cursor: pointer; }
+    .idioma-item { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; border: 1px solid var(--borde-gris); cursor: pointer; background: #fff; font-weight: 700; }
     .idioma-item img { width: 32px; height: 20px; object-fit: cover; }
-    .idioma-item.activo { border: 2px solid var(--amarillo-principal); background: #fff; }
+    .idioma-item.activo { border: 2px solid var(--amarillo-dorado); background: #FFFDF6; box-shadow: 0 6px 14px rgba(255,184,0,0.2); }
 
     .formulario-solicitud { top: 0; bottom: 0; background: #fff; padding: 16px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
     .formulario-solicitud h2 { font-size: 20px; font-weight: 700; }
@@ -654,33 +673,38 @@
     <main id="main-content">
       <section id="home" class="page active">
         <div class="promo-banner">
-          <svg class="promo-illustration" viewBox="0 0 300 140" style="width: 100%; height: 100%; position:absolute; inset:0;">
-            <rect x="20" y="30" width="50" height="60" rx="8" fill="#FFF" stroke="#E5E5E5" stroke-width="2"/>
-            <line x1="30" y1="45" x2="60" y2="45" stroke="#CCC" stroke-width="2"/>
-            <line x1="30" y1="55" x2="60" y2="55" stroke="#CCC" stroke-width="2"/>
-            <line x1="30" y1="65" x2="55" y2="65" stroke="#CCC" stroke-width="2"/>
-            <path d="M 75 60 L 95 60" stroke="#FF9500" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+          <svg class="promo-illustration" viewBox="0 0 320 180">
             <defs>
-              <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="3" orient="auto">
-                <polygon points="0 0, 6 3, 0 6" fill="#FF9500" />
-              </marker>
+              <linearGradient id="docGrad" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#FFF" />
+                <stop offset="100%" stop-color="#FFF3E0" />
+              </linearGradient>
+              <linearGradient id="aiGrad" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#5BA3F5" />
+                <stop offset="100%" stop-color="#357AE8" />
+              </linearGradient>
             </defs>
-            <rect x="100" y="30" width="50" height="60" rx="8" fill="#FFF" stroke="#E5E5E5" stroke-width="2"/>
-            <circle cx="110" cy="45" r="2" fill="#5BA3F5"/>
-            <line x1="115" y1="45" x2="140" y2="45" stroke="#888" stroke-width="1.5"/>
-            <circle cx="110" cy="55" r="2" fill="#5BA3F5"/>
-            <line x1="115" y1="55" x2="140" y2="55" stroke="#888" stroke-width="1.5"/>
-            <circle cx="110" cy="65" r="2" fill="#5BA3F5"/>
-            <line x1="115" y1="65" x2="135" y2="65" stroke="#888" stroke-width="1.5"/>
-            <ellipse cx="175" cy="50" rx="25" ry="15" fill="#FFE4E1" stroke="#E5E5E5" stroke-width="2"/>
-            <ellipse cx="190" cy="70" rx="30" ry="18" fill="#FFF3E0" stroke="#E5E5E5" stroke-width="2"/>
-            <circle cx="250" cy="60" r="30" fill="#5BA3F5"/>
-            <text x="250" y="70" text-anchor="middle" fill="#FFF" font-size="24" font-weight="700">AI</text>
+            <rect x="26" y="40" width="72" height="90" rx="12" fill="url(#docGrad)" stroke="#F0C27B" stroke-width="2"/>
+            <line x1="42" y1="62" x2="86" y2="62" stroke="#FFB800" stroke-width="3" stroke-linecap="round"/>
+            <line x1="42" y1="76" x2="82" y2="76" stroke="#E0A437" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="42" y1="92" x2="88" y2="92" stroke="#FFD580" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="150" cy="85" r="26" fill="#FFF8EC" stroke="#FFD27F" stroke-width="3"/>
+            <text x="150" y="92" text-anchor="middle" fill="#FFB800" font-size="16" font-weight="800">→ AI</text>
+            <path d="M100 85 Q125 55 150 85" fill="none" stroke="#FFB800" stroke-width="3" stroke-linecap="round"/>
+            <path d="M150 85 Q175 115 200 85" fill="none" stroke="#FF9500" stroke-width="3" stroke-linecap="round"/>
+            <rect x="210" y="35" width="84" height="100" rx="18" fill="#fff" stroke="#DCE8FF" stroke-width="3"/>
+            <circle cx="252" cy="70" r="26" fill="url(#aiGrad)" opacity="0.18"/>
+            <text x="252" y="76" text-anchor="middle" fill="#357AE8" font-size="22" font-weight="800">AI</text>
+            <rect x="226" y="88" width="52" height="10" rx="6" fill="#FFB800"/>
+            <rect x="226" y="106" width="44" height="10" rx="6" fill="#FFE6A9"/>
           </svg>
-          <div class="promo-text" style="position: absolute; bottom: 20px; left: 20px; right: 80px;">
-            <p style="font-size: 16px; font-weight: 500; color: #333; line-height: 1.4;">
-              Obtén un resumen rápido de un archivo o pregunta al AI cualquier cosa
+          <div class="promo-text" style="position: absolute; bottom: 28px; left: 20px; right: 120px;">
+            <p style="font-size: 16px; font-weight: 700; color: #1A1A1A; line-height: 1.4;">
+              Documento → Inteligencia Artificial → Resumen listo para escuchar
             </p>
+          </div>
+          <div class="carousel-dots">
+            <span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span>
           </div>
           <button class="btn-secondary" id="btn-free">Prueba gratis</button>
         </div>
@@ -728,13 +752,19 @@
 
       <section id="library" class="page">
         <header class="library-header">
-          <h1>Mi Biblioteca</h1>
+          <div class="lib-left">
+            <div class="ai-chip">AI</div>
+            <div>
+              <h1>Mi Biblioteca</h1>
+              <div class="lib-icons">
+                <span class="badge-pro">PRO</span>
+                <div class="star-counter">⭐ <span>0</span></div>
+              </div>
+            </div>
+          </div>
           <div class="lib-icons">
             <div class="progress-circle" id="btn-api-status" title="Configurar API Key" style="cursor: pointer; transition: all 0.3s;">
               <span class="circle-text">🤖</span>
-            </div>
-            <div class="star-counter">
-              ⭐<span>0</span>
             </div>
           </div>
         </header>
@@ -805,31 +835,31 @@
 
     <button class="fab" id="add-btn">+</button>
 
-    <section id="settings" class="page">
-      <div class="settings-page">
-        <section class="config-seccion">
-          <h3 class="titulo-seccion">Preferencias</h3>
-          <div class="config-item" data-action="clonacion">
-            <div class="icono-config">🎙️</div>
-            <span>Clonación de Voz</span>
-            <span class="flecha">›</span>
-          </div>
-          <div class="config-item" data-action="cambiar-voz">
-            <div class="icono-config">🔊</div>
-            <span>Cambiar Voz</span>
-            <span class="valor-actual" id="voz-actual">Sasha</span>
-          </div>
-          <div class="config-item" data-action="idioma">
-            <div class="icono-config">🌐</div>
-            <span>Idioma de la aplicación</span>
-            <span class="valor-actual">Español</span>
-          </div>
-          <div class="config-item" data-action="solicitar">
-            <div class="icono-config">✏️</div>
-            <span>Solicitar Función</span>
-            <span class="flecha">›</span>
-          </div>
-        </section>
+      <section id="settings" class="page">
+        <div class="settings-page">
+          <section class="config-seccion">
+            <h3 class="titulo-seccion">Preferencias</h3>
+            <div class="config-item" data-action="clonacion">
+              <div class="icono-config">🎙️</div>
+              <span>Clonación de Voz</span>
+              <span class="flecha">›</span>
+            </div>
+            <div class="config-item" data-action="cambiar-voz">
+              <div class="icono-config">🔊</div>
+              <span>Cambiar Voz</span>
+              <span class="valor-actual" id="voz-actual">Sasha</span>
+            </div>
+            <div class="config-item" data-action="idioma">
+              <div class="icono-config">🌐</div>
+              <span>Idioma de la aplicación</span>
+              <span class="valor-actual">Español</span>
+            </div>
+            <div class="config-item" data-action="solicitar">
+              <div class="icono-config">✏️</div>
+              <span>Solicitar Función</span>
+              <span class="flecha">›</span>
+            </div>
+          </section>
 
         <section class="config-seccion">
           <h3 class="titulo-seccion">Cuentas vinculadas</h3>
@@ -846,6 +876,20 @@
           <div class="config-item" data-action="compartir">
             <div class="icono-config">📤</div>
             <span>Compartir Listen AI</span>
+            <span class="flecha">›</span>
+          </div>
+        </section>
+
+        <section class="config-seccion">
+          <h3 class="titulo-seccion">Soporte</h3>
+          <div class="config-item" data-action="calificar">
+            <div class="icono-config">❤️</div>
+            <span>¿Te gusta? Califícanos</span>
+            <span class="flecha">›</span>
+          </div>
+          <div class="config-item" data-action="ayuda">
+            <div class="icono-config">💬</div>
+            <span>Soporte y ayuda</span>
             <span class="flecha">›</span>
           </div>
         </section>
@@ -885,13 +929,16 @@
         <h4 id="doc-menu-title"></h4>
         <span id="doc-menu-type"></span>
       </div>
-      <button class="btn-cerrar" data-close>×</button>
+      <div class="acciones">
+        <button class="btn-editar" title="Editar">✏️</button>
+        <button class="btn-cerrar" data-close>×</button>
+      </div>
     </div>
     <div class="opciones-menu">
       <button data-action="download">
         <span class="icono">⬇️</span>
         <div>
-          <strong>Descargar Audio</strong>
+          <strong>Descargar Audio (con voz)</strong>
           <small id="doc-voice">Sasha</small>
           <p>Permite escuchar sin conexión dentro de la aplicación.</p>
         </div>
@@ -902,7 +949,7 @@
       <button data-action="finalizar"><span>✓</span> Marcar como Finalizado</button>
       <button data-action="favorito"><span>♥</span> Agregar a Favoritos</button>
       <div class="separador"></div>
-      <button data-action="saltar"><span>🔄</span> Saltar Contenido Automáticamente</button>
+      <button data-action="saltar"><span>🔄</span> Saltar Contenido PRO</button>
       <button data-action="temporizador"><span>⏰</span> Temporizador de Sueño</button>
       <button data-action="exportar"><span>↗️</span> Exportar audio<p>Guarda el audio en el dispositivo o compártelo directamente.</p></button>
       <div class="separador"></div>
@@ -924,7 +971,7 @@
 
   <div class="modal-idioma" id="language-modal">
     <header>
-      <button class="btn-volver" data-close>‹</button>
+      <button class="btn-volver" data-close>&lt;</button>
       <h2>Cambiar idioma de la aplicación</h2>
     </header>
     <div class="lista-idiomas" id="language-list"></div>
@@ -1020,6 +1067,16 @@
         'settings.language': 'Langue de l\'application'
       }
     };
+
+    // Fallbacks rápidos para los nuevos idiomas desbloqueados
+    TRANSLATIONS['en-US'] = TRANSLATIONS['en'];
+    TRANSLATIONS['en-GB'] = TRANSLATIONS['en'];
+    TRANSLATIONS['pt-BR'] = TRANSLATIONS['pt'] || TRANSLATIONS['es'];
+    TRANSLATIONS['pt-PT'] = TRANSLATIONS['pt'] || TRANSLATIONS['es'];
+    TRANSLATIONS['it'] = TRANSLATIONS['en'];
+    TRANSLATIONS['de'] = TRANSLATIONS['en'];
+    TRANSLATIONS['tr'] = TRANSLATIONS['en'];
+    TRANSLATIONS['zh'] = TRANSLATIONS['en'];
 
     let currentLanguage = localStorage.getItem('appLanguage') || 'es';
 
@@ -1213,8 +1270,8 @@
       modal.innerHTML = `
         <div class="modal-idioma" style="display: block;">
           <header>
-            <button class="btn-volver" onclick="this.closest('.modal-overlay').remove()">‹</button>
-            <h2>${t('settings.language')}</h2>
+            <button class="btn-volver" onclick="this.closest('.modal-overlay').remove()">&lt;</button>
+            <h2>Cambiar idioma de la aplicación</h2>
           </header>
           <div class="lista-idiomas" id="language-list"></div>
         </div>
@@ -1225,10 +1282,16 @@
       const languageList = modal.querySelector('#language-list');
       
       const idiomas = [
-        { code: 'en', nombre: 'English (US)', flag: '🇺🇸' },
+        { code: 'en-US', nombre: 'Inglés (EE.UU)', flag: '🇺🇸' },
+        { code: 'en-GB', nombre: 'Inglés (Reino Unido)', flag: '🇬🇧' },
         { code: 'es', nombre: 'Español', flag: '🇪🇸' },
-        { code: 'pt', nombre: 'Português', flag: '🇧🇷' },
-        { code: 'fr', nombre: 'Français', flag: '🇫🇷' }
+        { code: 'pt-BR', nombre: 'Brasileño', flag: '🇧🇷' },
+        { code: 'pt-PT', nombre: 'Portugués', flag: '🇵🇹' },
+        { code: 'fr', nombre: 'Francés', flag: '🇫🇷' },
+        { code: 'it', nombre: 'Italiano', flag: '🇮🇹' },
+        { code: 'de', nombre: 'Alemán', flag: '🇩🇪' },
+        { code: 'tr', nombre: 'Turco', flag: '🇹🇷' },
+        { code: 'zh', nombre: 'Chino simplificado', flag: '🇨🇳' }
       ];
       
       idiomas.forEach(idioma => {
@@ -1959,7 +2022,7 @@
         card.className = 'voz-card' + (voz.nombre === vozSeleccionada ? ' activa' : '');
         card.innerHTML = `
           <div class="avatar-circular"><img src="${voz.avatar}" alt="${voz.nombre}" onerror="this.src='https://placehold.co/64x64'"/></div>
-          <div class="info-voz"><h4>${voz.nombre}</h4><p>${voz.desc}</p><div class="onda-sonido">|||||||||||</div></div>
+          <div class="info-voz"><h4>${voz.nombre}</h4><p>${voz.desc || 'Calidad Premium • Multilingüe'}</p><div class="onda-sonido">|||||||||||||||||||||</div></div>
           <button class="btn-play">▶</button>
         `;
         card.querySelector('.btn-play').addEventListener('click', () => previewVoice(voz.nombre));
@@ -2236,6 +2299,9 @@
         'texto': '📝',
         'correo': '✉️'
       };
+      const fechaDoc = new Date(doc.fecha);
+      const hoy = new Date();
+      const fechaLabel = fechaDoc.toDateString() === hoy.toDateString() ? 'Hoy' : fechaDoc.toLocaleDateString();
       item.innerHTML = `
         <div class="miniatura">
           ${doc.miniatura && doc.miniatura.startsWith('data:')
@@ -2244,7 +2310,7 @@
         </div>
         <div class="info">
           <h3>${doc.titulo}</h3>
-          <p class="meta">${new Date(doc.fecha).toLocaleDateString()} - ${doc.tipo} - ${formatTime(doc.duracion)}</p>
+          <div class="meta"><span>${fechaLabel}</span><span>${doc.tipo}</span><span>${formatTime(doc.duracion)}</span></div>
         </div>
         <button class="menu-puntos">⋮</button>
       `;
