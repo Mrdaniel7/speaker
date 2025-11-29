@@ -1541,7 +1541,8 @@
       return chunks;
     }
 
-    async function speakNatural(texto, vozNombre, velocidad = 1.0) {
+    async function speakNatural(texto, vozNombre, velocidad = 1.0, options = {}) {
+      const { silenciarErrores = false } = options;
       const apiKey = localStorage.getItem('googleTTSKey');
       
       if (!apiKey) {
@@ -1556,12 +1557,12 @@
       }
       
       try {
-        const chunks = dividirEnChunks(
-          texto.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
-        );
+        const textoLimpio = (texto ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
+        const chunks = dividirEnChunks(textoLimpio);
 
         if (!chunks.length) {
-          throw new Error('Texto vacío después de limpieza');
+          if (!silenciarErrores) mostrarPopupError('No hay texto para reproducir.');
+          return null;
         }
 
         const audioBuffers = [];
@@ -1599,13 +1600,15 @@
             const errorData = await response.json().catch(() => ({}));
             console.error('❌ Google TTS Error:', response.status, errorData);
 
-            if (response.status === 400) {
-              mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
-            } else if (response.status === 403) {
-              localStorage.removeItem('googleTTSKey');
-              mostrarPopupError('API Key sin permisos. Reconfigura.');
-            } else if (response.status === 429) {
-              mostrarPopupError('Límite de cuota excedido.');
+            if (!silenciarErrores) {
+              if (response.status === 400) {
+                mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
+              } else if (response.status === 403) {
+                localStorage.removeItem('googleTTSKey');
+                mostrarPopupError('API Key sin permisos. Reconfigura.');
+              } else if (response.status === 429) {
+                mostrarPopupError('Límite de cuota excedido.');
+              }
             }
 
             return usarVozNavegador(texto, vozNombre, velocidad);
@@ -1631,7 +1634,7 @@
         
       } catch (error) {
         console.error('❌ Error en síntesis de voz:', error);
-        mostrarPopupError(`Error al generar audio: ${error.message}`);
+        if (!silenciarErrores) mostrarPopupError(`Error al generar audio: ${error.message}`);
         return usarVozNavegador(texto, vozNombre, velocidad);
       }
     }
@@ -2285,16 +2288,17 @@
       }
       
       // Textos de demostración en el idioma nativo de cada voz
+      const TEXTO_PREVIEW_POR_DEFECTO = 'Hola, esta es una muestra de mi voz.';
       const textoDemos = {
         'es-ES': `Hola, soy ${vozNombre}. Mi voz es natural y clara, perfecta para escuchar tus documentos en español.`,
         'en-US': `Hello, I'm ${vozNombre}. My voice is natural and clear, perfect for listening to your documents.`,
         'en-GB': `Hello, I'm ${vozNombre}. My voice is natural and clear, perfect for listening to your documents in British English.`
       };
-      
-      const texto = textoDemos[vozConfig.languageCode] || textoDemos['es-ES'];
-      
+
+      const texto = (textoDemos[vozConfig.languageCode] || textoDemos['es-ES'] || TEXTO_PREVIEW_POR_DEFECTO).trim() || TEXTO_PREVIEW_POR_DEFECTO;
+
       console.log('🔊 Preview de voz:', vozNombre, 'idioma:', vozConfig.languageCode);
-      
+
       // Detener cualquier reproducción previa
       if (window.currentPreviewAudio) {
         try {
@@ -2303,16 +2307,22 @@
           console.warn('No se pudo pausar audio previo');
         }
       }
-      
+
       // Generar y reproducir audio
-      const audio = await speakNatural(texto, vozNombre, 1.0);
-      
-      if (audio) {
-        window.currentPreviewAudio = audio;
-        audio.play();
-        console.log('✅ Reproduciendo preview');
-      } else {
-        console.error('❌ No se pudo generar preview');
+      try {
+        const audio = await speakNatural(texto, vozNombre, 1.0, { silenciarErrores: true });
+
+        if (audio) {
+          window.currentPreviewAudio = audio;
+          audio.play();
+          console.log('✅ Reproduciendo preview');
+        } else {
+          mostrarPopupError('No se pudo generar el audio de previsualización.');
+          console.error('❌ No se pudo generar preview');
+        }
+      } catch (error) {
+        mostrarPopupError('No se pudo reproducir la previsualización de voz. Intenta de nuevo.');
+        console.error('❌ Error en preview de voz:', error);
       }
     }
 
