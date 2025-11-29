@@ -78,6 +78,21 @@
       gap: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    .tarjeta-acceso:active { transform: translateY(1px) scale(0.995); box-shadow: 0 6px 16px rgba(255,149,0,0.18); }
+    .tarjeta-acceso .ripple {
+      position: absolute;
+      border-radius: 50%;
+      transform: scale(0);
+      animation: ripple 0.5s linear;
+      background: rgba(91, 163, 245, 0.25);
+      pointer-events: none;
+    }
+    @keyframes ripple {
+      to { transform: scale(4); opacity: 0; }
     }
     .icon-card {
       width: 48px;
@@ -185,6 +200,14 @@
     .velocidades-rapidas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .velocidades-rapidas button { padding: 10px 14px; border-radius: 16px; border: 1px solid #FFE0B2; background: #FFF8EC; cursor: pointer; font-weight: 700; color: var(--texto-negro); min-width: 64px; }
 
+    .selector-documento { bottom: 0; background: #fff; border-radius: 24px 24px 0 0; padding: 24px; position: fixed; left: 0; right: 0; z-index: 45; box-shadow: 0 -10px 30px rgba(0,0,0,0.14); }
+    .selector-documento h3 { font-size: 20px; font-weight: 800; margin-bottom: 12px; text-align: center; }
+    .selector-opciones { display: grid; gap: 12px; }
+    .selector-opciones button { padding: 14px; border-radius: 14px; border: 1px solid var(--borde-gris); background: #FFF8EC; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 14px rgba(255,184,0,0.12); }
+    .selector-opciones button span { font-size: 22px; }
+    .selector-opciones button.secondary { background: #F6F8FF; border-color: #DFE7FF; box-shadow: 0 4px 14px rgba(91,163,245,0.12); }
+    .selector-opciones small { color: var(--texto-gris); font-weight: 500; display: block; }
+
     .modal-documento { top: 8%; bottom: 8%; margin: 0 14px; background: #fff; border-radius: 18px; padding: 16px; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
     .header-menu { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--borde-gris); padding-bottom: 10px; }
     .header-menu .acciones { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -201,6 +224,7 @@
     .contenido-vacio { display: grid; place-items: center; gap: 8px; text-align: center; color: var(--texto-gris); }
     .modal-notas textarea { width: 100%; min-height: 160px; border: 1px solid var(--borde-gris); border-radius: 12px; padding: 12px; font-size: 16px; }
     .btn-fab-nota { align-self: center; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--amarillo-principal); color: #fff; font-size: 28px; box-shadow: 0 6px 16px rgba(255,184,0,0.35); cursor: pointer; position: sticky; bottom: 12px; }
+    .btn-borrar-nota { background: #FFE8E6; border: 1px solid #FFC2BD; color: #FF3B30; border-radius: 12px; padding: 10px 12px; font-weight: 700; cursor: pointer; }
 
     .modal-idioma { top: 0; bottom: 0; background: #fff; padding: 16px; overflow-y: auto; }
     .modal-idioma header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -668,6 +692,7 @@
   </style>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -918,7 +943,7 @@
     <div class="velocidad-actual" id="velocidad-actual">1.0 x</div>
     <input type="range" min="0.7" max="3.0" step="0.1" value="1.0" class="slider-velocidad" id="speed-slider" />
     <div class="marcas-velocidad">
-      <span>0.7</span><span>1.5</span><span>3.0</span>
+      <span>0.7</span><span>1.0</span><span>2.0</span><span>3.0</span>
     </div>
     <div class="velocidades-rapidas" id="speed-buttons"></div>
   </div>
@@ -944,6 +969,8 @@
           <p>Permite escuchar sin conexión dentro de la aplicación.</p>
         </div>
       </button>
+      <button data-action="edit"><span>✏️</span> Editar texto o título</button>
+      <button data-action="share"><span>📤</span> Compartir</button>
       <button data-action="notas"><span>📝</span> Notas</button>
       <button data-action="resumir"><span>📋</span> Resumir</button>
       <button data-action="cola"><span>➕</span> Añadir a la cola</button>
@@ -967,6 +994,7 @@
       <p>Mente despejada, página en blanco.<br>¡Tus notas te esperan!</p>
     </div>
     <textarea id="notes-area" placeholder="Escribe tus notas"></textarea>
+    <button class="btn-borrar-nota" id="delete-note">Eliminar nota</button>
     <button class="btn-fab-nota" id="save-note">+</button>
   </div>
 
@@ -992,7 +1020,15 @@
     <button type="submit" class="btn-enviar" id="send-idea">Enviar</button>
   </form>
 
-  <input type="file" id="file-input" accept=".pdf,.docx,.txt" style="display:none" />
+  <div class="selector-documento" id="file-source-modal" style="display:none;">
+    <h3>¿Desde dónde quieres importar?</h3>
+    <div class="selector-opciones">
+      <button id="pick-from-device"><span>📁</span><div><strong>Dispositivo</strong><small>PDF, DOC, DOCX o TXT</small></div></button>
+      <button class="secondary" id="pick-from-drive"><span>☁️</span><div><strong>Google Drive</strong><small>Pega el enlace compartido para importarlo</small></div></button>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt" style="display:none" />
   <input type="file" id="image-input" accept="image/*" style="display:none" />
 
   <script type="module">
@@ -1719,6 +1755,9 @@
     const fab = document.getElementById('add-btn');
     const fileInput = document.getElementById('file-input');
     const imageInput = document.getElementById('image-input');
+    const fileSourceModal = document.getElementById('file-source-modal');
+    const pickFromDevice = document.getElementById('pick-from-device');
+    const pickFromDrive = document.getElementById('pick-from-drive');
     const playerTitle = document.getElementById('player-title');
     const playerText = document.getElementById('player-text');
     const playPauseBtn = document.getElementById('play-pause');
@@ -1735,6 +1774,7 @@
     const docVoiceLabel = document.getElementById('doc-voice');
     const notesArea = document.getElementById('notes-area');
     const notesEmpty = document.getElementById('notes-empty');
+    const deleteNoteBtn = document.getElementById('delete-note');
     const charCounter = document.getElementById('char-counter');
     const sendIdea = document.getElementById('send-idea');
     const ideaInfo = document.getElementById('idea-info');
@@ -1748,7 +1788,7 @@
     let lecturaTimer = null;
     let lecturaInicio = null;
     let palabrasTotales = 0;
-    let notas = {};
+    let notas = JSON.parse(localStorage.getItem('notasApp') || '{}');
     let audioDuration = 0;
     let audioElement = null;
     let audioObjectUrl = null;
@@ -2010,7 +2050,7 @@
 
     function closeModals() {
       toggleOverlay(false);
-      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm].forEach((m) => m.style.display = 'none');
+      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm, fileSourceModal].forEach((m) => m.style.display = 'none');
     }
 
     modalOverlay.addEventListener('click', closeModals);
@@ -2259,7 +2299,7 @@
 
     function renderSpeedButtons() {
       speedButtons.innerHTML = '';
-      [1.0, 1.2, 1.5, 2.0, 3.0].forEach((v) => {
+      [0.7, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0].forEach((v) => {
         const btn = document.createElement('button');
         btn.textContent = v.toFixed(1);
         btn.addEventListener('click', () => setSpeed(v));
@@ -2282,7 +2322,10 @@
       console.log('⚡ Velocidad:', velocidadActual);
     }
 
-    speedBtn.addEventListener('click', () => openModal(speedModal));
+    speedBtn.addEventListener('click', () => {
+      setSpeed(velocidadActual);
+      openModal(speedModal);
+    });
     speedSlider.addEventListener('input', (e) => setSpeed(e.target.value));
     renderSpeedButtons();
 
@@ -2557,6 +2600,26 @@
             });
           }
         }
+        if (action === 'edit') {
+          mostrarPopupInput('Editar título', documentoActivo.titulo, async (nuevoTitulo) => {
+            await updateDocumento(documentoActivo.id, { titulo: nuevoTitulo });
+            const nuevoTexto = prompt('Edita el contenido (opcional)', documentoActivo.texto);
+            if (nuevoTexto !== null) {
+              await updateDocumento(documentoActivo.id, { texto: nuevoTexto, duracion: calcularDuracion(nuevoTexto) });
+            }
+            renderDocumentos();
+          });
+        }
+        if (action === 'share') {
+          const contenido = `${documentoActivo.titulo}\n\n${documentoActivo.texto.substring(0, 800)}...`;
+          if (navigator.share) {
+            navigator.share({ title: documentoActivo.titulo, text: contenido }).catch(() => {});
+          } else {
+            navigator.clipboard.writeText(contenido)
+              .then(() => mostrarPopupExito('Texto copiado para compartir'))
+              .catch(() => mostrarPopupError('No se pudo copiar el contenido'));
+          }
+        }
         if (action === 'notas') {
           const note = notas[documentoActivo.id] || '';
           notesArea.value = note;
@@ -2634,13 +2697,29 @@
 
     const cards = document.querySelectorAll('.tarjeta-acceso');
     cards.forEach((card) => {
-      card.addEventListener('click', () => handleAction(card.dataset.action));
+      card.addEventListener('click', (e) => {
+        const ripple = document.createElement('span');
+        const rect = card.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        ripple.className = 'ripple';
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+        ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+        card.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 500);
+        handleAction(card.dataset.action);
+      });
     });
 
     fab.addEventListener('click', () => handleAction('texto'));
 
+    function abrirSelectorArchivos() {
+      toggleOverlay(true);
+      fileSourceModal.style.display = 'block';
+    }
+
     async function handleAction(action) {
-      if (action === 'archivo') fileInput.click();
+      if (action === 'archivo') abrirSelectorArchivos();
       if (action === 'escanear') imageInput.click();
       if (action === 'url') {
         mostrarPopupInput('Ingresa la URL', 'https://ejemplo.com', async (url) => {
@@ -2660,6 +2739,27 @@
       }
     }
 
+    pickFromDevice.addEventListener('click', () => {
+      fileSourceModal.style.display = 'none';
+      toggleOverlay(false);
+      fileInput.click();
+    });
+
+    pickFromDrive.addEventListener('click', () => {
+      fileSourceModal.style.display = 'none';
+      toggleOverlay(false);
+      mostrarPopupInput('Pega el enlace de Drive', 'https://drive.google.com/...', async (url) => {
+        try {
+          const response = await fetch(url);
+          const texto = await response.text();
+          await crearDocumentoDesdeTexto('Importado de Drive', texto.slice(0, 20000), 'archivo');
+          mostrarPopupExito('Enlace de Drive importado');
+        } catch (e) {
+          mostrarPopupError('No se pudo importar desde Drive (revisa permisos del enlace)');
+        }
+      });
+    });
+
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -2671,6 +2771,10 @@
         if (file.name.endsWith('.pdf')) {
           texto = await extraerTextoPDF(file);
           tipo = 'pdf';
+        } else if (file.name.endsWith('.doc')) {
+          const arrayBuffer = await file.arrayBuffer();
+          texto = new TextDecoder('utf-8').decode(arrayBuffer);
+          tipo = 'doc';
         } else if (file.name.endsWith('.docx')) {
           texto = await extraerTextoDOCX(file);
           tipo = 'docx';
@@ -2692,10 +2796,6 @@
       } finally {
         fileInput.value = '';
       }
-    });
-
-    document.querySelector('[data-action="escanear"]').addEventListener('click', () => {
-      imageInput.click();
     });
 
     imageInput.addEventListener('change', async (e) => {
@@ -2821,8 +2921,18 @@
     document.getElementById('save-note').addEventListener('click', () => {
       if (documentoActivo) {
         notas[documentoActivo.id] = notesArea.value;
+        localStorage.setItem('notasApp', JSON.stringify(notas));
         closeModals();
       }
+    });
+
+    deleteNoteBtn.addEventListener('click', () => {
+      if (!documentoActivo) return;
+      notas[documentoActivo.id] = '';
+      localStorage.setItem('notasApp', JSON.stringify(notas));
+      notesArea.value = '';
+      notesEmpty.style.display = 'block';
+      closeModals();
     });
 
     requestForm.addEventListener('submit', (e) => {
