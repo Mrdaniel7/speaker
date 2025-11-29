@@ -177,7 +177,7 @@
 
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 30; }
     .modal-overlay.active { display: block; }
-    .modal-voz, .modal-velocidad, .modal-documento, .modal-notas, .modal-idioma, .formulario-solicitud { display: none; position: fixed; z-index: 40; left: 0; right: 0; }
+    .modal-voz, .modal-velocidad, .modal-documento, .modal-notas, .modal-idioma, .formulario-solicitud, .modal-editar { display: none; position: fixed; z-index: 40; left: 0; right: 0; }
     .modal-voz { bottom: 0; background: #fff; border-radius: 24px 24px 0 0; padding: 24px 20px; max-height: 85vh; overflow-y: auto; }
     .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .modal-header h3 { font-size: 22px; font-weight: 700; }
@@ -198,6 +198,62 @@
     .slider-velocidad { width: 100%; accent-color: var(--naranja-botones); }
     .marcas-velocidad { display: flex; justify-content: space-between; color: var(--texto-gris); margin-top: 6px; font-weight: 600; }
     .velocidades-rapidas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    .modal-editar {
+      background: #fff;
+      border-radius: 20px;
+      padding: 20px;
+      max-width: 520px;
+      width: 92%;
+      margin: 80px auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .modal-editar h3 { font-size: 20px; font-weight: 800; margin-bottom: 12px; }
+    .modal-editar label { display: block; margin: 8px 0 4px; font-weight: 600; color: #444; }
+    .modal-editar input, .modal-editar textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #E5E5E5;
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      background: #fafafa;
+    }
+    .modal-editar textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
+    .editar-acciones { display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end; }
+    .btn-secundario { background: #F5F5F5; color: #444; border: none; padding: 12px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+    .btn-primario { background: linear-gradient(135deg, #FFB800, #FF9500); color: #fff; border: none; padding: 12px 18px; border-radius: 12px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 18px rgba(255,149,0,0.25); }
+
+    .loader-proceso {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.15);
+      z-index: 45;
+      align-items: center;
+      justify-content: center;
+    }
+    .loader-card {
+      background: #fff;
+      padding: 18px 20px;
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-width: 260px;
+    }
+    .loader-spinner {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 4px solid #FFE2AE;
+      border-top-color: #FF9500;
+      animation: girar 0.9s linear infinite;
+    }
+    .loader-card strong { display: block; font-size: 15px; }
+    .loader-card small { color: #666; }
+    @keyframes girar { to { transform: rotate(360deg); } }
     .velocidades-rapidas button { padding: 10px 14px; border-radius: 16px; border: 1px solid #FFE0B2; background: #FFF8EC; cursor: pointer; font-weight: 700; color: var(--texto-negro); min-width: 64px; }
 
     .selector-documento { bottom: 0; background: #fff; border-radius: 24px 24px 0 0; padding: 24px; position: fixed; left: 0; right: 0; z-index: 45; box-shadow: 0 -10px 30px rgba(0,0,0,0.14); }
@@ -1031,6 +1087,31 @@
   <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt" style="display:none" />
   <input type="file" id="image-input" accept="image/*" style="display:none" />
 
+  <div class="modal-editar" id="edit-modal">
+    <div class="modal-header" style="margin-bottom:6px;">
+      <h3 style="margin:0;">Editar documento</h3>
+      <button class="btn-cerrar" data-close="edit">×</button>
+    </div>
+    <label for="edit-title">Título</label>
+    <input id="edit-title" type="text" maxlength="120" />
+    <label for="edit-content">Contenido</label>
+    <textarea id="edit-content"></textarea>
+    <div class="editar-acciones">
+      <button class="btn-secundario" id="cancel-edit">Cancelar</button>
+      <button class="btn-primario" id="save-edit">Guardar cambios</button>
+    </div>
+  </div>
+
+  <div class="loader-proceso" id="loader-proceso">
+    <div class="loader-card">
+      <div class="loader-spinner"></div>
+      <div>
+        <strong id="loader-titulo">Procesando...</strong>
+        <small id="loader-mensaje">Esto puede tardar unos segundos</small>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     const TRANSLATIONS = {
       'es': {
@@ -1211,6 +1292,13 @@
         if (onCancel) onCancel();
         popup.remove();
       });
+    }
+
+    function toggleLoader(mostrar, titulo = 'Procesando...', mensaje = 'Esto puede tardar unos segundos') {
+      if (!loaderProceso) return;
+      loaderTitulo.textContent = titulo;
+      loaderMensaje.textContent = mensaje;
+      loaderProceso.style.display = mostrar ? 'flex' : 'none';
     }
 
     function actualizarTextos() {
@@ -1778,6 +1866,14 @@
     const charCounter = document.getElementById('char-counter');
     const sendIdea = document.getElementById('send-idea');
     const ideaInfo = document.getElementById('idea-info');
+    const editModal = document.getElementById('edit-modal');
+    const editTitle = document.getElementById('edit-title');
+    const editContent = document.getElementById('edit-content');
+    const saveEdit = document.getElementById('save-edit');
+    const cancelEdit = document.getElementById('cancel-edit');
+    const loaderProceso = document.getElementById('loader-proceso');
+    const loaderTitulo = document.getElementById('loader-titulo');
+    const loaderMensaje = document.getElementById('loader-mensaje');
     const vozActualLabel = document.getElementById('voz-actual');
 
     let documentos = [];
@@ -2050,7 +2146,8 @@
 
     function closeModals() {
       toggleOverlay(false);
-      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm, fileSourceModal].forEach((m) => m.style.display = 'none');
+      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm, fileSourceModal, editModal].forEach((m) => m.style.display = 'none');
+      toggleLoader(false);
     }
 
     modalOverlay.addEventListener('click', closeModals);
@@ -2580,6 +2677,14 @@
       openModal(docMenu);
     }
 
+    function abrirModalEdicion(doc) {
+      if (!doc) return;
+      editTitle.value = doc.titulo || '';
+      editContent.value = doc.texto || '';
+      toggleOverlay(true);
+      editModal.style.display = 'block';
+    }
+
     docMenu.querySelectorAll('.opciones-menu button').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!documentoActivo) return;
@@ -2601,19 +2706,14 @@
           }
         }
         if (action === 'edit') {
-          mostrarPopupInput('Editar título', documentoActivo.titulo, async (nuevoTitulo) => {
-            await updateDocumento(documentoActivo.id, { titulo: nuevoTitulo });
-            const nuevoTexto = prompt('Edita el contenido (opcional)', documentoActivo.texto);
-            if (nuevoTexto !== null) {
-              await updateDocumento(documentoActivo.id, { texto: nuevoTexto, duracion: calcularDuracion(nuevoTexto) });
-            }
-            renderDocumentos();
-          });
+          docMenu.style.display = 'none';
+          abrirModalEdicion(documentoActivo);
         }
         if (action === 'share') {
-          const contenido = `${documentoActivo.titulo}\n\n${documentoActivo.texto.substring(0, 800)}...`;
+          const contenido = `${documentoActivo.titulo}\n\n${documentoActivo.texto.substring(0, 800)}...\n${location.href}`;
           if (navigator.share) {
-            navigator.share({ title: documentoActivo.titulo, text: contenido }).catch(() => {});
+            navigator.share({ title: documentoActivo.titulo, text: contenido, url: location.href })
+              .catch(() => mostrarPopupError('No se pudo compartir en este dispositivo'));
           } else {
             navigator.clipboard.writeText(contenido)
               .then(() => mostrarPopupExito('Texto copiado para compartir'))
@@ -2651,6 +2751,30 @@
         closeModals();
       });
     });
+
+    saveEdit.addEventListener('click', async () => {
+      if (!documentoActivo) return;
+      const nuevoTitulo = editTitle.value.trim();
+      const nuevoContenido = editContent.value.trim();
+      if (!nuevoTitulo || !nuevoContenido) {
+        mostrarPopupError('Completa título y contenido antes de guardar');
+        return;
+      }
+
+      toggleLoader(true, 'Guardando cambios', 'Actualizando documento en tu biblioteca...');
+      await updateDocumento(documentoActivo.id, {
+        titulo: nuevoTitulo,
+        texto: nuevoContenido,
+        duracion: calcularDuracion(nuevoContenido)
+      });
+      toggleLoader(false);
+      closeModals();
+      renderDocumentos();
+      mostrarPopupExito('✅ Documento actualizado');
+    });
+
+    cancelEdit.addEventListener('click', closeModals);
+    document.querySelectorAll('[data-close="edit"]').forEach((btn) => btn.addEventListener('click', closeModals));
 
     function resumirTexto(texto, porcentaje = 30) {
       texto = texto.replace(/\n+/g, ' ').trim();
@@ -2696,20 +2820,27 @@
     }
 
     const cards = document.querySelectorAll('.tarjeta-acceso');
-    cards.forEach((card) => {
-      card.addEventListener('click', (e) => {
-        const ripple = document.createElement('span');
-        const rect = card.getBoundingClientRect();
-        const size = Math.max(rect.width, rect.height);
-        ripple.className = 'ripple';
-        ripple.style.width = ripple.style.height = `${size}px`;
-        ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
-        ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
-        card.appendChild(ripple);
-        setTimeout(() => ripple.remove(), 500);
-        handleAction(card.dataset.action);
+
+    function bindCardEvents() {
+      cards.forEach((card) => {
+        if (card.dataset.bound) return;
+        card.dataset.bound = 'true';
+        card.addEventListener('click', (e) => {
+          const ripple = document.createElement('span');
+          const rect = card.getBoundingClientRect();
+          const size = Math.max(rect.width, rect.height);
+          ripple.className = 'ripple';
+          ripple.style.width = ripple.style.height = `${size}px`;
+          ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+          ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+          card.appendChild(ripple);
+          setTimeout(() => ripple.remove(), 500);
+          handleAction(card.dataset.action);
+        });
       });
-    });
+    }
+
+    bindCardEvents();
 
     fab.addEventListener('click', () => handleAction('texto'));
 
@@ -2765,6 +2896,7 @@
       if (!file) return;
 
       try {
+        toggleLoader(true, 'Procesando archivo', file.name);
         let texto = '';
         let tipo = 'archivo';
 
@@ -2794,6 +2926,7 @@
         mostrarPopupError(`❌ Error procesando archivo: ${error.message}`);
         console.error(error);
       } finally {
+        toggleLoader(false);
         fileInput.value = '';
       }
     });
@@ -2982,6 +3115,8 @@
       // ✅ FORZAR PÁGINA INICIAL
       switchPage('home');
       console.log('✅ Página inicial: home');
+
+      bindCardEvents();
 
       const storedKey = localStorage.getItem('googleTTSKey');
       const skipAPIKey = localStorage.getItem('skipAPIKey') === 'true';
