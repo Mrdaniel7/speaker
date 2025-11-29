@@ -926,6 +926,11 @@
               <span>Clonación de Voz</span>
               <span class="flecha">›</span>
             </div>
+            <div class="config-item" data-action="config-api">
+              <div class="icono-config">🔐</div>
+              <span>API Key de Google TTS</span>
+              <span class="valor-actual" id="api-status-label">Sin configurar</span>
+            </div>
             <div class="config-item" data-action="cambiar-voz">
               <div class="icono-config">🔊</div>
               <span>Cambiar Voz</span>
@@ -1113,6 +1118,13 @@
   </div>
 
   <script type="module">
+    const DEFAULT_API_KEY = 'AIzaSyC7zk08wM1t1UCTkzzfdVO2RZ_Z4OnhDSg';
+    const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
+
+    const logDebug = (...args) => {
+      if (DEBUG_MODE) console.log('[DEBUG]', ...args);
+    };
+
     const TRANSLATIONS = {
       'es': {
         'nav.home': 'Inicio',
@@ -1950,6 +1962,15 @@
 
     const VOICES_DATA = Object.values(VOICE_CONFIG);
 
+    const getStoredApiKey = () => localStorage.getItem('googleTTSKey');
+    const setStoredApiKey = (key) => {
+      localStorage.setItem('googleTTSKey', key);
+      localStorage.setItem('skipAPIKey', 'false');
+      window.dispatchEvent(new Event('apiKeyUpdated'));
+    };
+
+    const getApiStatusLabel = () => document.getElementById('api-status-label');
+
     // ✅ CARGAR VOZ CLONADA SI EXISTE
     const clonedVoice = localStorage.getItem('clonedVoice');
     if (clonedVoice) {
@@ -1965,14 +1986,49 @@
       }
     }
 
+    function actualizarEstadoAPIKeyUI(isValidKey) {
+      const btnApiStatus = document.getElementById('btn-api-status');
+      const icon = btnApiStatus?.querySelector('.circle-text');
+      const apiLabel = getApiStatusLabel();
+      const apiKey = getStoredApiKey();
+
+      if (btnApiStatus && icon) {
+        if (isValidKey && apiKey) {
+          btnApiStatus.style.borderColor = '#34C759';
+          btnApiStatus.style.background = '#E8F9EE';
+          icon.textContent = '✓';
+          icon.style.color = '#34C759';
+          btnApiStatus.title = 'API Key configurada ✓';
+        } else {
+          btnApiStatus.style.borderColor = '#FF3B30';
+          btnApiStatus.style.background = '#FFEBEA';
+          icon.textContent = '⚠';
+          icon.style.color = '#FF3B30';
+          btnApiStatus.title = 'Configurar API Key';
+        }
+      }
+
+      if (apiLabel) {
+        apiLabel.textContent = isValidKey && apiKey ? 'Configurada' : 'Sin configurar';
+        apiLabel.style.color = isValidKey && apiKey ? '#1A1A1A' : '#FF3B30';
+      }
+    }
+
+    function toggleApiLoading(show, popup) {
+      const loading = popup.querySelector('#api-loading');
+      const actionButtons = popup.querySelectorAll('.api-actions button');
+      if (loading) loading.style.display = show ? 'flex' : 'none';
+      actionButtons.forEach((btn) => (btn.disabled = show));
+    }
+
     function mostrarPopupAPIKey(force = false) {
       const skipAPIKey = localStorage.getItem('skipAPIKey') === 'true';
-      const storedKey = localStorage.getItem('googleTTSKey');
+      const storedKey = getStoredApiKey();
       const existingModal = document.getElementById('api-key-modal');
       if (existingModal) existingModal.remove();
 
       if (!force && (skipAPIKey || storedKey)) {
-        console.log('ℹ️ Modal API Key omitido', { skipAPIKey, tieneAPI: !!storedKey });
+        logDebug('ℹ️ Modal API Key omitido', { skipAPIKey, tieneAPI: !!storedKey });
         return;
       }
 
@@ -2048,7 +2104,8 @@
       const skipBtn = document.getElementById('skip-api-btn');
       const toggleBtn = document.getElementById('toggle-visibility');
       const errorMsg = document.getElementById('api-error');
-      const loading = document.getElementById('api-loading');
+
+      input.value = storedKey || DEFAULT_API_KEY || '';
 
       let isVisible = false;
       toggleBtn.addEventListener('click', () => {
@@ -2065,28 +2122,22 @@
           return;
         }
 
-        loading.style.display = 'flex';
-        validateBtn.disabled = true;
+        toggleApiLoading(true, popup);
         errorMsg.style.display = 'none';
 
-        const isValid = await validarAPIKey(apiKey);
+        const { valid, message } = await validarAPIKey(apiKey);
 
-        loading.style.display = 'none';
-        validateBtn.disabled = false;
+        toggleApiLoading(false, popup);
 
-        if (isValid) {
-          localStorage.setItem('googleTTSKey', apiKey);
-          localStorage.removeItem('skipAPIKey');
-          window.dispatchEvent(new Event('apiKeyUpdated'));
+        if (valid) {
+          setStoredApiKey(apiKey);
+          actualizarEstadoAPIKeyUI(true);
           mostrarPopupExito('✅ API Key configurada correctamente');
-          setTimeout(() => {
-            popup.remove();
-            toggleOverlay(false);
-          }, 1200);
+          popup.remove();
+          toggleOverlay(false);
         } else {
-          mostrarError('API Key inválida o sin permisos. Verifica y prueba de nuevo.');
-          input.value = '';
-          input.focus();
+          mostrarError(message || 'API Key inválida o sin permisos. Verifica y prueba de nuevo.');
+          input.select();
         }
       });
 
@@ -2096,6 +2147,7 @@
         closeModals();
         popup.remove();
         toggleOverlay(false);
+        actualizarEstadoAPIKeyUI(false);
       });
 
       function mostrarError(mensaje) {
@@ -2115,11 +2167,52 @@
           headers: { 'Content-Type': 'application/json' }
         });
 
-        return response.ok;
+        const data = await response.json();
+
+        if (!response.ok) {
+          const message = data?.error?.message || 'API Key inválida o sin permisos';
+          return { valid: false, message };
+        }
+
+        const hasVoices = Array.isArray(data.voices) && data.voices.length > 0;
+        return { valid: hasVoices, message: hasVoices ? '' : 'La API Key no devolvió voces disponibles' };
       } catch (error) {
         console.error('Error validando API Key:', error);
+        return { valid: false, message: 'No se pudo validar la API Key. Revisa tu conexión.' };
+      }
+    }
+
+    async function inicializarAPIKey() {
+      const skipAPIKey = localStorage.getItem('skipAPIKey') === 'true';
+      const storedKey = getStoredApiKey();
+      const candidateKey = storedKey || DEFAULT_API_KEY;
+
+      if (skipAPIKey && !storedKey) {
+        logDebug('API Key omitida por preferencia del usuario');
+        actualizarEstadoAPIKeyUI(false);
         return false;
       }
+
+      if (candidateKey) {
+        const { valid, message } = await validarAPIKey(candidateKey);
+        if (valid) {
+          setStoredApiKey(candidateKey);
+          actualizarEstadoAPIKeyUI(true);
+          logDebug('API Key válida e inicializada');
+          return true;
+        }
+
+        logDebug('API Key inválida en inicialización', message);
+        if (storedKey) {
+          localStorage.removeItem('googleTTSKey');
+        }
+      }
+
+      actualizarEstadoAPIKeyUI(false);
+      if (!skipAPIKey) {
+        mostrarPopupAPIKey(true);
+      }
+      return false;
     }
 
     function switchPage(target) {
@@ -2802,21 +2895,34 @@
     }
 
     async function descargarAudio(doc, apiKey) {
-      const vozConfig = VOICE_CONFIG[doc.vozSeleccionada || 'Sasha'] || VOICE_CONFIG['Sasha'];
-      const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: { text: doc.texto },
-          voice: { languageCode: vozConfig.languageCode, name: vozConfig.googleVoice, ssmlGender: vozConfig.gender },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: doc.velocidad || 1.0 },
-        }),
-      });
-      const data = await response.json();
-      const blob = base64ToBlob(data.audioContent, 'audio/mp3');
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${doc.titulo}.mp3`; a.click();
+      try {
+        const vozConfig = VOICE_CONFIG[doc.vozSeleccionada || 'Sasha'] || VOICE_CONFIG['Sasha'];
+        const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text: doc.texto },
+            voice: { languageCode: vozConfig.languageCode, name: vozConfig.googleVoice, ssmlGender: vozConfig.gender },
+            audioConfig: { audioEncoding: 'MP3', speakingRate: doc.velocidad || 1.0 },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody?.error?.message || 'No se pudo generar el audio');
+        }
+
+        const data = await response.json();
+        if (!data.audioContent) throw new Error('Respuesta sin audio');
+
+        const blob = base64ToBlob(data.audioContent, 'audio/mp3');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${doc.titulo}.mp3`; a.click();
+      } catch (error) {
+        console.error('❌ Error al descargar audio:', error);
+        mostrarPopupError(`No se pudo descargar el audio: ${error.message}`);
+      }
     }
 
     const cards = document.querySelectorAll('.tarjeta-acceso');
@@ -3117,57 +3223,26 @@
       console.log('✅ Página inicial: home');
 
       bindCardEvents();
-
-      const storedKey = localStorage.getItem('googleTTSKey');
-      const skipAPIKey = localStorage.getItem('skipAPIKey') === 'true';
-
-      if (!storedKey && !skipAPIKey) {
-        mostrarPopupAPIKey();
-      } else if (storedKey) {
-        const isValid = await validarAPIKey(storedKey);
-        if (!isValid) {
-          localStorage.removeItem('googleTTSKey');
-          if (!skipAPIKey) {
-            mostrarPopupAPIKey();
-          } else {
-            console.warn('⚠️ API Key inválida, pero el usuario eligió omitirla');
-          }
-        }
-      } else {
-        console.log('ℹ️ API Key omitida por preferencia del usuario');
-      }
+      await inicializarAPIKey();
 
       // ✅ BOTÓN DE API KEY EN HEADER
       const btnApiStatus = document.getElementById('btn-api-status');
       if (btnApiStatus) {
-
-        function actualizarEstadoAPI() {
-          const apiKey = localStorage.getItem('googleTTSKey');
-          const icon = btnApiStatus.querySelector('.circle-text');
-
-          if (apiKey) {
-            btnApiStatus.style.borderColor = '#34C759';
-            btnApiStatus.style.background = '#E8F9EE';
-            icon.textContent = '✓';
-            icon.style.color = '#34C759';
-            btnApiStatus.title = 'API Key configurada ✓';
-          } else {
-            btnApiStatus.style.borderColor = '#FF3B30';
-            btnApiStatus.style.background = '#FFEBEA';
-            icon.textContent = '⚠';
-            icon.style.color = '#FF3B30';
-            btnApiStatus.title = 'Configurar API Key';
-          }
-        }
-
         btnApiStatus.addEventListener('click', () => {
           console.log('🔑 Abriendo configuración de API Key');
           mostrarPopupAPIKey(true);
         });
 
-        actualizarEstadoAPI();
-        window.addEventListener('apiKeyUpdated', actualizarEstadoAPI);
+        actualizarEstadoAPIKeyUI(!!getStoredApiKey());
+        window.addEventListener('apiKeyUpdated', () => actualizarEstadoAPIKeyUI(true));
       }
+
+      document.querySelectorAll('[data-action="config-api"]').forEach((el) => {
+        el.addEventListener('click', () => {
+          localStorage.setItem('skipAPIKey', 'false');
+          mostrarPopupAPIKey(true);
+        });
+      });
 
       loadVoices(() => renderVoices());
       setSpeed(velocidadActual);
