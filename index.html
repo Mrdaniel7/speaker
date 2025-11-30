@@ -226,6 +226,7 @@
     .tabs { display: flex; gap: 8px; margin: 16px 0; overflow-x: auto; }
     .tab { border: none; padding: 10px 20px; border-radius: 24px; background: #F0F0F0; color: var(--texto-gris); font-weight: 600; cursor: pointer; }
     .tab.active { background: var(--texto-negro); color: #fff; }
+    .guest-warning { background: #fff3cd; color: #8a6d3b; border: 1px solid #ffeeba; padding: 12px 14px; border-radius: 12px; margin-bottom: 12px; font-weight: 600; }
 
     #document-list { display: flex; flex-direction: column; gap: 12px; }
     .documento-item { background: #fff; border-radius: 14px; padding: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #FFE0B2; }
@@ -1735,6 +1736,7 @@
 
     let currentUser = null;
     let authInitialized = false;
+    let firestoreUnsubscribe = null;
 
     const logDebug = (...args) => {
       if (DEBUG_MODE) console.log('[DEBUG]', ...args);
@@ -2439,12 +2441,12 @@
       });
       if (!current) return;
       const putReq = store.put({ ...current, ...updates });
-      const shouldSync = currentUser && current.userId === currentUser.uid;
+      const shouldSync = isAuthenticated() && current.userId === currentUser.uid;
       return new Promise((resolve, reject) => {
         putReq.onsuccess = () => tx.oncomplete = async () => {
           if (shouldSync) {
             try {
-              await updateFirestoreDocument(id, updates);
+              await updateFirestoreDocument(current.userId || currentUser?.uid, id, updates);
             } catch (error) {
               console.error('No se pudo sincronizar con Firestore', error);
             }
@@ -2459,12 +2461,12 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const delReq = tx.objectStore('documentos').delete(id);
-      const shouldSync = currentUser && id;
+      const shouldSync = isAuthenticated() && !!id;
       return new Promise((resolve, reject) => {
         delReq.onsuccess = () => tx.oncomplete = async () => {
           if (shouldSync) {
             try {
-              await deleteFirestoreDocument(id);
+              await deleteFirestoreDocument(currentUser?.uid, id);
             } catch (error) {
               console.error('No se pudo eliminar en Firestore', error);
             }
@@ -2788,12 +2790,15 @@
       localStorage.setItem(GUEST_MODE_KEY, value ? 'true' : 'false');
       if (value) {
         currentUser = null;
+        stopFirestoreListener();
         userGoogleTTSKey = getGuestAPIKey();
         actualizarEstadoAPIKeyUI(!!userGoogleTTSKey);
         updateApiKeySettingsUI();
       }
     };
 
+    const isAuthenticated = () => firebaseAppInitialized && !!firebase.auth().currentUser;
+    const isGuestSession = () => !isAuthenticated() || isGuestMode;
     const isFirebaseAvailable = () => !isGuestMode && firebaseAppInitialized;
 
     function showLoginScreen(message = '') {
@@ -3013,6 +3018,7 @@
 
     async function logoutUser() {
       authLog('🚪 Cerrando sesión manualmente');
+      stopFirestoreListener();
       if (isFirebaseAvailable()) {
         try {
           await firebase.auth().signOut();
@@ -3111,21 +3117,46 @@
       }
     }
 
+    const getUserDocumentsCollection = (userId) => firebase.firestore().collection('users').doc(userId).collection('documents');
+
+    function mapFirestoreDocToLocal(doc, userId) {
+      const data = doc.data();
+      const texto = data.content || data.text || data.texto || '';
+      return {
+        id: doc.id,
+        userId,
+        titulo: data.title || data.titulo || 'Documento',
+        texto,
+        vozSeleccionada: data.voice || data.voz || 'Sasha',
+        velocidad: data.speed || data.velocidad || 1.0,
+        duracion: data.duracion || calcularDuracion(texto),
+        miniatura: data.miniatura || 'https://placehold.co/60x60/F5F5F5/666?text=📄',
+        estado: data.estado || 'todo',
+        favorito: !!data.favorito,
+        posicionReproduccion: data.posicionReproduccion || 0,
+        fecha: data.updatedAt?.toDate?.()?.toISOString?.() || data.timestamp?.toDate?.()?.toISOString?.() || new Date().toISOString(),
+        tipo: data.tipo || data.type || 'texto',
+        audioUrl: data.audioUrl || null
+      };
+    }
+
     async function saveUserDocument(userId, docData) {
-      if (!isFirebaseAvailable()) return null;
+      if (!firebaseAppInitialized || !userId) return null;
       try {
-        const docRef = await firebase.firestore().collection('documents').add({
-          userId,
+        const docRef = await getUserDocumentsCollection(userId).add({
           title: docData.title,
+          content: docData.text || docData.content || '',
           text: docData.text,
           voice: docData.voice || 'Selena',
           speed: docData.speed || 1.0,
-          miniatura: docData.miniatura,
-          duracion: docData.duracion,
+          miniatura: docData.miniatura || 'https://placehold.co/60x60/F5F5F5/666?text=📄',
+          duracion: docData.duracion || 0,
           estado: docData.estado || 'todo',
           favorito: !!docData.favorito,
           posicionReproduccion: docData.posicionReproduccion || 0,
           tipo: docData.tipo || 'texto',
+          audioUrl: docData.audioUrl || docData.audio || null,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -3137,35 +3168,14 @@
     }
 
     async function loadUserDocuments(userId) {
-      if (!isFirebaseAvailable()) return [];
+      if (!firebaseAppInitialized || !userId) return [];
       try {
         authLog('📂 Descargando documentos de usuario', { userId });
-        const snapshot = await firebase.firestore()
-          .collection('documents')
-          .where('userId', '==', userId)
+        const snapshot = await getUserDocumentsCollection(userId)
           .orderBy('updatedAt', 'desc')
           .get();
 
-        const documents = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          documents.push({
-            id: doc.id,
-            userId,
-            titulo: data.title || data.titulo || 'Documento',
-            texto: data.text || data.texto || '',
-            vozSeleccionada: data.voice || data.voz || 'Sasha',
-            velocidad: data.speed || data.velocidad || 1.0,
-            duracion: data.duracion || calcularDuracion(data.text || data.texto || ''),
-            miniatura: data.miniatura || 'https://placehold.co/60x60/F5F5F5/666?text=📄',
-            estado: data.estado || 'todo',
-            favorito: !!data.favorito,
-            posicionReproduccion: data.posicionReproduccion || 0,
-            fecha: data.updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString(),
-            tipo: data.tipo || 'texto'
-          });
-        });
-
+        const documents = snapshot.docs.map((doc) => mapFirestoreDocToLocal(doc, userId));
         authLog('📚 Documentos cargados', { total: documents.length });
         return documents;
       } catch (error) {
@@ -3174,30 +3184,56 @@
       }
     }
 
-    async function updateFirestoreDocument(id, updates) {
-      if (!isFirebaseAvailable()) return null;
+    async function updateFirestoreDocument(userId, id, updates) {
+      if (!firebaseAppInitialized || !userId) return null;
       const payload = { ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
       try {
-        return await firebase.firestore().collection('documents').doc(id).update(payload);
+        return await getUserDocumentsCollection(userId).doc(id).update(payload);
       } catch (error) {
         handleFirebaseOperationError('actualizar documento', error);
         throw error;
       }
     }
 
-    async function deleteFirestoreDocument(id) {
-      if (!isFirebaseAvailable()) return null;
+    async function deleteFirestoreDocument(userId, id) {
+      if (!firebaseAppInitialized || !userId) return null;
       try {
-        return await firebase.firestore().collection('documents').doc(id).delete();
+        return await getUserDocumentsCollection(userId).doc(id).delete();
       } catch (error) {
         handleFirebaseOperationError('eliminar documento', error);
         throw error;
       }
     }
 
+    function stopFirestoreListener() {
+      if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+        firestoreUnsubscribe = null;
+      }
+    }
+
+    function subscribeToUserDocuments(userId) {
+      if (!firebaseAppInitialized || !userId) return;
+      stopFirestoreListener();
+      firestoreUnsubscribe = getUserDocumentsCollection(userId)
+        .orderBy('updatedAt', 'desc')
+        .onSnapshot(async (snapshot) => {
+          const docs = snapshot.docs.map((doc) => mapFirestoreDocToLocal(doc, userId));
+          await clearLocalDocumentos();
+          for (const doc of docs) {
+            await addDocumento(doc);
+          }
+          documentos = await getDocumentos(userId);
+          renderDocumentos();
+        }, (error) => {
+          console.error('Error en sincronización en tiempo real:', error);
+          mostrarPopupError('No pudimos sincronizar tus documentos en tiempo real.');
+        });
+    }
+
     async function syncUserDocuments(userId) {
       try {
-        if (!isFirebaseAvailable()) return;
+        if (!isAuthenticated()) return;
         toggleLoader(true, 'Cargando tu biblioteca', 'Sincronizando documentos de tu cuenta...');
         const docs = await loadUserDocuments(userId);
         await clearLocalDocumentos();
@@ -3206,12 +3242,38 @@
         }
         documentos = await getDocumentos(userId);
         renderDocumentos();
+        subscribeToUserDocuments(userId);
       } catch (error) {
         console.error('Error sincronizando documentos:', error);
         mostrarPopupError('No pudimos cargar tus documentos. Intenta de nuevo.');
       } finally {
         toggleLoader(false);
       }
+    }
+
+    async function migrateGuestDocumentsToFirestore(userId) {
+      if (!isAuthenticated() || !userId) return;
+      const localGuestDocs = await getDocumentos('guest');
+      if (!localGuestDocs.length) return;
+
+      for (const doc of localGuestDocs) {
+        const payload = {
+          title: doc.titulo,
+          text: doc.texto,
+          voice: doc.vozSeleccionada || 'Sasha',
+          speed: doc.velocidad || 1.0,
+          miniatura: doc.miniatura,
+          duracion: doc.duracion,
+          estado: doc.estado || 'todo',
+          favorito: doc.favorito || false,
+          posicionReproduccion: doc.posicionReproduccion || 0,
+          tipo: doc.tipo || 'texto',
+          audioUrl: doc.audioUrl || null
+        };
+        await saveUserDocument(userId, payload);
+      }
+
+      await clearLocalDocumentos();
     }
 
     async function guardarDocumentoUsuario(doc) {
@@ -3227,11 +3289,12 @@
         estado: doc.estado || 'todo',
         favorito: doc.favorito || false,
         posicionReproduccion: doc.posicionReproduccion || 0,
-        tipo: doc.tipo || 'texto'
+        tipo: doc.tipo || 'texto',
+        audioUrl: doc.audioUrl || null
       };
 
       try {
-        if (isFirebaseAvailable() && currentUser?.uid && !isGuestMode) {
+        if (isAuthenticated() && currentUser?.uid) {
           const firestoreId = await saveUserDocument(currentUser.uid, docData);
           const localDoc = { ...doc, id: firestoreId, userId: currentUser.uid };
           await addDocumento(localDoc);
@@ -3248,7 +3311,7 @@
         mostrarPopupExito('Documento guardado localmente');
         return localDoc.id;
       } catch (error) {
-        if (isGuestMode || !isFirebaseAvailable()) {
+        if (isGuestSession()) {
           console.error('❌ Error guardando documento local', error);
           mostrarPopupError('No se pudo guardar el documento localmente. Intenta de nuevo.');
           return null;
@@ -3408,6 +3471,7 @@
           showMainApp();
           try {
             await ensureUserSettings(user.uid, user.email || currentUser?.email, false);
+            await migrateGuestDocumentsToFirestore(user.uid);
             await syncUserDocuments(user.uid);
             await loadUserSettings(user.uid);
             await inicializarAPIKey();
@@ -3420,6 +3484,7 @@
           }
         } else {
           authStateLog('🔁 Sesión cerrada, limpiando estado local');
+          stopFirestoreListener();
           userGoogleTTSKey = null;
           updateApiKeySettingsUI();
           showLoginScreen('Inicia sesión para continuar');
@@ -4232,18 +4297,23 @@
     }
 
     async function renderDocumentos() {
-      const targetUserId = isGuestMode ? 'guest' : currentUser?.uid;
+      const guestContext = isGuestSession();
+      const targetUserId = guestContext ? 'guest' : currentUser?.uid;
       if (!targetUserId) {
         docList.innerHTML = '<p style="padding:16px; color:#666;">Inicia sesión para ver tus documentos.</p>';
         return;
       }
 
       documentos = await getDocumentos(targetUserId);
-      if (!documentos.length && isGuestMode) {
-        docList.innerHTML = '<p style="padding:16px; color:#666;">Añade tu primer documento para verlo aquí.</p>';
+      const guestWarning = guestContext
+        ? '<div class="guest-warning">Documentos solo disponibles en este dispositivo. Inicia sesión para sincronizar.</div>'
+        : '';
+
+      if (!documentos.length && guestContext) {
+        docList.innerHTML = `${guestWarning}<p style=\"padding:16px; color:#666;\">Añade tu primer documento para verlo aquí.</p>`;
         return;
       }
-      docList.innerHTML = '';
+      docList.innerHTML = guestWarning;
       documentos.filter(filtrarDoc).forEach((doc) => docList.appendChild(crearDocumentoItem(doc)));
     }
 
