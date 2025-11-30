@@ -2163,7 +2163,8 @@
     async function generateGoogleTTS(text, voiceName, apiKey, speakingRate = 1.0) {
       const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
       const voiceId = voiceName || 'es-ES-Neural2-A';
-      const languageCode = voiceId.startsWith('en-') ? 'en-US' : 'es-ES';
+      const [langPart, regionPart] = voiceId.split('-');
+      const languageCode = (langPart && regionPart) ? `${langPart}-${regionPart}` : 'es-ES';
       const payload = {
         input: { text },
         voice: { languageCode, name: voiceId },
@@ -2222,6 +2223,8 @@
         }
 
         const audioBuffers = [];
+
+        console.log('Generating audio with Google Cloud TTS:', vozConfig.googleVoice, 'idioma:', vozConfig.languageCode);
 
         for (const parte of chunks) {
           console.log('📝 Enviando a Google TTS:', parte.substring(0, 50) + '...');
@@ -3523,66 +3526,88 @@
       });
     }
 
-    const VOICE_CONFIG = {
-      'Sasha': {
+    const NATURAL_VOICES = [
+      {
+        id: 'sasha',
         nombre: 'Sasha',
         desc: 'Google Cloud TTS • Español',
-        avatar: 'https://i.pravatar.cc/150?img=32',
-        googleVoice: 'es-ES-Neural2-A',
+        gender: 'femenino',
         languageCode: 'es-ES',
-        gender: 'FEMALE'
+        googleVoice: 'es-ES-Neural2-A',
+        avatar: 'https://ui-avatars.com/api/?name=Sasha&background=FF6B9D&color=fff&size=128'
       },
-      'Selena': {
+      {
+        id: 'selena',
         nombre: 'Selena',
         desc: 'Google Cloud TTS • Español',
-        avatar: 'https://i.pravatar.cc/150?img=45',
-        googleVoice: 'es-ES-Neural2-C',
+        gender: 'femenino',
         languageCode: 'es-ES',
-        gender: 'FEMALE'
+        googleVoice: 'es-ES-Neural2-C',
+        avatar: 'https://ui-avatars.com/api/?name=Selena&background=9B59B6&color=fff&size=128'
       },
-      'Ariel': {
+      {
+        id: 'ariel',
         nombre: 'Ariel',
         desc: 'Google Cloud TTS • Español',
-        avatar: 'https://i.pravatar.cc/150?img=12',
-        googleVoice: 'es-ES-Neural2-B',
+        gender: 'masculino',
         languageCode: 'es-ES',
-        gender: 'MALE'
+        googleVoice: 'es-ES-Neural2-B',
+        avatar: 'https://ui-avatars.com/api/?name=Ariel&background=3498DB&color=fff&size=128'
       },
-      'Alex': {
+      {
+        id: 'alex',
         nombre: 'Alex',
         desc: 'Google Cloud TTS • Español',
-        avatar: 'https://i.pravatar.cc/150?img=33',
-        googleVoice: 'es-ES-Neural2-D',
+        gender: 'masculino',
         languageCode: 'es-ES',
-        gender: 'MALE'
+        googleVoice: 'es-ES-Neural2-D',
+        avatar: 'https://ui-avatars.com/api/?name=Alex&background=2ECC71&color=fff&size=128'
       },
-      'Sam': {
+      {
+        id: 'sam',
         nombre: 'Sam',
         desc: 'Google Cloud TTS • Inglés',
-        avatar: 'https://i.pravatar.cc/150?img=52',
-        googleVoice: 'en-US-Neural2-J',
+        gender: 'masculino',
         languageCode: 'en-US',
-        gender: 'MALE'
+        googleVoice: 'en-US-Neural2-J',
+        avatar: 'https://ui-avatars.com/api/?name=Sam&background=E67E22&color=fff&size=128'
       },
-      'Robin': {
+      {
+        id: 'robin',
         nombre: 'Robin',
         desc: 'Google Cloud TTS • Inglés',
-        avatar: 'https://i.pravatar.cc/150?img=48',
-        googleVoice: 'en-US-Neural2-H',
+        gender: 'femenino',
         languageCode: 'en-US',
-        gender: 'FEMALE'
+        googleVoice: 'en-US-Neural2-H',
+        avatar: 'https://ui-avatars.com/api/?name=Robin&background=E74C3C&color=fff&size=128'
       },
-      'Emery': {
+      {
+        id: 'emery',
         nombre: 'Emery',
         desc: 'Google Cloud TTS • Inglés',
-        avatar: 'https://i.pravatar.cc/150?img=47',
-        googleVoice: 'en-US-Neural2-F',
+        gender: 'femenino',
         languageCode: 'en-US',
-        gender: 'FEMALE'
+        googleVoice: 'en-US-Neural2-F',
+        avatar: 'https://ui-avatars.com/api/?name=Emery&background=1ABC9C&color=fff&size=128'
       }
-    };
+    ];
+
+    const VOICE_CONFIG = NATURAL_VOICES.reduce((acc, voice) => {
+      acc[voice.nombre] = {
+        ...voice,
+        gender: voice.gender?.toUpperCase?.() || 'NEUTRAL'
+      };
+      return acc;
+    }, {});
 
     const VOICES_DATA = Object.values(VOICE_CONFIG);
+
+    function getVoicesForLanguage(appLanguage, voicesList = Object.values(VOICE_CONFIG)) {
+      const primary = (appLanguage || 'es').split('-')[0];
+      const preferred = voicesList.filter((voice) => voice.languageCode?.startsWith(primary));
+      const others = voicesList.filter((voice) => !voice.languageCode?.startsWith(primary));
+      return preferred.concat(others);
+    }
 
     function updateVoiceLabels(nombre = vozSeleccionada) {
       const selectedName = nombre || vozSeleccionada;
@@ -3617,7 +3642,7 @@
 
     function getAvailableVoices() {
       if (userGoogleTTSKey) {
-        return VOICES_DATA;
+        return getVoicesForLanguage(currentLanguage, Object.values(VOICE_CONFIG));
       }
 
       const browserVoices = window.speechSynthesis?.getVoices?.() || [];
