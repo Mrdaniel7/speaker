@@ -14,6 +14,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <style>
     :root {
       --amarillo-principal: #FFB800;
@@ -33,10 +36,106 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--fondo-rosa-pastel); color: var(--texto-negro); }
-    #app { min-height: 100vh; padding-bottom: 80px; }
+    #app { min-height: 100vh; padding-bottom: 80px; display: none; }
 
     .page { display: none; padding: 16px; }
     .page.active { display: block; }
+
+    /* --- Auth Screen --- */
+    #auth-screen {
+      display: none;
+      min-height: 100vh;
+      background: var(--fondo-rosa-pastel);
+      padding: 32px 16px 24px;
+      color: var(--texto-negro);
+      align-items: center;
+      justify-content: center;
+    }
+    .auth-card {
+      width: min(420px, 100%);
+      background: #fff;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+      border: 1px solid #FFE0B2;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      animation: fadeIn 0.4s ease;
+    }
+    .auth-logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--amarillo-principal), var(--naranja-botones));
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 26px;
+      font-weight: 800;
+      margin: 0 auto;
+      box-shadow: 0 10px 28px rgba(255, 149, 0, 0.32);
+    }
+    .auth-toggle {
+      display: flex;
+      background: #f9f9f9;
+      padding: 6px;
+      border-radius: 14px;
+      border: 1px solid #f0f0f0;
+      gap: 6px;
+    }
+    .auth-toggle button {
+      flex: 1;
+      border: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: transparent;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .auth-toggle button.active { background: #fff; color: var(--texto-negro); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .auth-title { text-align: center; font-size: 24px; font-weight: 800; }
+    .auth-subtitle { text-align: center; color: var(--texto-gris); font-size: 14px; }
+    .auth-form { display: flex; flex-direction: column; gap: 12px; }
+    .auth-form label { font-weight: 700; font-size: 14px; color: var(--texto-gris); }
+    .auth-form input[type="email"], .auth-form input[type="password"] {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1.5px solid #E5E5E5;
+      font-size: 16px;
+      transition: border 0.2s ease;
+    }
+    .auth-form input:focus { border-color: var(--amarillo-principal); outline: none; box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.18); }
+    .auth-actions { display: flex; align-items: center; justify-content: space-between; }
+    .auth-button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--amarillo-principal), var(--naranja-botones));
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(255, 149, 0, 0.28);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .auth-button:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
+    .auth-links { display: flex; justify-content: space-between; font-size: 14px; color: var(--texto-gris); }
+    .auth-links a { color: var(--naranja-botones); text-decoration: none; font-weight: 700; }
+    .auth-error { background: #FFE8E6; color: #C0392B; padding: 12px; border-radius: 12px; border: 1px solid #F5B7B1; font-weight: 600; display: none; }
+    .auth-success { background: #E7F9EF; color: #1B8E5A; padding: 12px; border-radius: 12px; border: 1px solid #C9F0D7; font-weight: 600; display: none; }
+    .remember-me { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texto-gris); }
+    .auth-loader { width: 16px; height: 16px; border: 3px solid #fff; border-top-color: rgba(255,255,255,0.2); border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity:1; transform: translateY(0);} }
 
     .promo-banner {
       background: linear-gradient(135deg, #FFF6F2, #FFE7D1);
@@ -751,6 +850,54 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 </head>
 <body>
+  <div id="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo">AI</div>
+      <div class="auth-toggle">
+        <button id="login-tab" class="active">Iniciar Sesión</button>
+        <button id="signup-tab">Crear Cuenta</button>
+      </div>
+      <div class="auth-title" id="auth-title">Bienvenido de vuelta</div>
+      <div class="auth-subtitle" id="auth-subtitle">Inicia sesión para acceder a tu biblioteca</div>
+
+      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-success" id="auth-success"></div>
+
+      <form id="login-form" class="auth-form">
+        <div>
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="tu@email.com" required />
+        </div>
+        <div>
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" placeholder="••••••" required />
+        </div>
+        <div class="auth-actions">
+          <label class="remember-me">
+            <input type="checkbox" id="remember-me" /> Recordarme
+          </label>
+          <a href="#" id="forgot-password">¿Olvidaste tu contraseña?</a>
+        </div>
+        <button type="submit" class="auth-button" id="login-button">Iniciar Sesión</button>
+      </form>
+
+      <form id="signup-form" class="auth-form" style="display:none;">
+        <div>
+          <label for="signup-email">Email</label>
+          <input type="email" id="signup-email" placeholder="tu@email.com" required />
+        </div>
+        <div>
+          <label for="signup-password">Contraseña</label>
+          <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" minlength="6" required />
+        </div>
+        <div>
+          <label for="signup-confirm">Confirmar contraseña</label>
+          <input type="password" id="signup-confirm" placeholder="Repite tu contraseña" minlength="6" required />
+        </div>
+        <button type="submit" class="auth-button" id="signup-button">Crear Cuenta</button>
+      </form>
+    </div>
+  </div>
   <div id="app">
     <main id="main-content">
       <section id="home" class="page active">
@@ -949,6 +1096,22 @@
           </section>
 
         <section class="config-seccion">
+          <h3 class="titulo-seccion">Tu cuenta</h3>
+          <div class="config-item">
+            <div class="icono-config">📧</div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <span id="user-email-display">Sin sesión</span>
+              <small id="email-verified-badge" style="color:#666; font-weight:600;">Email no verificado</small>
+            </div>
+          </div>
+          <div class="config-item" id="logout-action">
+            <div class="icono-config" style="background:#FFE8E6; color:#C0392B;">🚪</div>
+            <span style="color:#C0392B;">Cerrar Sesión</span>
+            <span class="flecha">›</span>
+          </div>
+        </section>
+
+        <section class="config-seccion">
           <h3 class="titulo-seccion">Cuentas vinculadas</h3>
           <div class="cuenta-item">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="icono-servicio" alt="Google" />
@@ -1120,6 +1283,31 @@
   <script type="module">
     const DEFAULT_API_KEY = 'AIzaSyC7zk08wM1t1UCTkzzfdVO2RZ_Z4OnhDSg';
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBN8LR3WPl1rEW6S6U6mz6kCpgQ-qwQ5Jw",
+      authDomain: "interfaces-4bc20.firebaseapp.com",
+      projectId: "interfaces-4bc20",
+      storageBucket: "interfaces-4bc20.firebasestorage.app",
+      messagingSenderId: "827349679851",
+      appId: "1:827349679851:web:8d4c8ee5e5ffb5e5c39c6e"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    const errorMessages = {
+      'auth/email-already-in-use': 'Este email ya está registrado',
+      'auth/invalid-email': 'Email inválido',
+      'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres)',
+      'auth/user-not-found': 'Usuario no encontrado',
+      'auth/wrong-password': 'Contraseña incorrecta',
+      'auth/network-request-failed': 'Error de conexión. Verifica tu internet.'
+    };
+
+    let currentUser = null;
+    let authInitialized = false;
 
     const logDebug = (...args) => {
       if (DEBUG_MODE) console.log('[DEBUG]', ...args);
@@ -1752,6 +1940,7 @@
     // --- Database ---
     const dbName = 'ListenAIDB';
     const dbVersion = 1;
+    const generateId = () => (crypto.randomUUID ? crypto.randomUUID() : `doc_${Date.now()}_${Math.random().toString(16).slice(2)}`);
 
     function openDB() {
       return new Promise((resolve, reject) => {
@@ -1774,28 +1963,33 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const store = tx.objectStore('documentos');
-      const req = store.add({
+      const payload = {
         ...doc,
-        fecha: new Date().toISOString(),
-        estado: 'todo',
-        favorito: false,
-        posicionReproduccion: 0,
-        vozSeleccionada: doc.vozSeleccionada || 'Sasha',
-        velocidad: doc.velocidad || 1.0,
-      });
+        id: doc.id || generateId(),
+        fecha: doc.fecha || new Date().toISOString(),
+        estado: doc.estado || 'todo',
+        favorito: !!doc.favorito,
+        posicionReproduccion: doc.posicionReproduccion || 0,
+        vozSeleccionada: doc.vozSeleccionada || doc.voz || 'Sasha',
+        velocidad: doc.velocidad || doc.speed || 1.0,
+      };
+      const req = store.put(payload);
       return new Promise((resolve, reject) => {
-        req.onsuccess = () => tx.oncomplete = () => resolve(req.result);
+        req.onsuccess = () => tx.oncomplete = () => resolve(payload.id);
         req.onerror = () => reject(req.error);
       });
     }
 
-    async function getDocumentos() {
+    async function getDocumentos(userId = null) {
       const db = await openDB();
       const tx = db.transaction('documentos', 'readonly');
       const store = tx.objectStore('documentos');
       return new Promise((resolve, reject) => {
         const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
+        req.onsuccess = () => {
+          const docs = req.result || [];
+          resolve(userId ? docs.filter((doc) => doc.userId === userId) : docs);
+        };
         req.onerror = () => reject(req.error);
       });
     }
@@ -1811,8 +2005,18 @@
       });
       if (!current) return;
       const putReq = store.put({ ...current, ...updates });
+      const shouldSync = currentUser && current.userId === currentUser.uid;
       return new Promise((resolve, reject) => {
-        putReq.onsuccess = () => tx.oncomplete = () => resolve();
+        putReq.onsuccess = () => tx.oncomplete = async () => {
+          if (shouldSync) {
+            try {
+              await updateFirestoreDocument(id, updates);
+            } catch (error) {
+              console.error('No se pudo sincronizar con Firestore', error);
+            }
+          }
+          resolve(current);
+        };
         putReq.onerror = () => reject(putReq.error);
       });
     }
@@ -1821,9 +2025,29 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const delReq = tx.objectStore('documentos').delete(id);
+      const shouldSync = currentUser && id;
       return new Promise((resolve, reject) => {
-        delReq.onsuccess = () => tx.oncomplete = () => resolve();
+        delReq.onsuccess = () => tx.oncomplete = async () => {
+          if (shouldSync) {
+            try {
+              await deleteFirestoreDocument(id);
+            } catch (error) {
+              console.error('No se pudo eliminar en Firestore', error);
+            }
+          }
+          resolve();
+        };
         delReq.onerror = () => reject(delReq.error);
+      });
+    }
+
+    async function clearLocalDocumentos() {
+      const db = await openDB();
+      const tx = db.transaction('documentos', 'readwrite');
+      const clearReq = tx.objectStore('documentos').clear();
+      return new Promise((resolve, reject) => {
+        clearReq.onsuccess = () => tx.oncomplete = () => resolve();
+        clearReq.onerror = () => reject(clearReq.error);
       });
     }
 
@@ -1838,6 +2062,21 @@
     }
 
     // --- Main App Logic ---
+    const appContainer = document.getElementById('app');
+    const authScreen = document.getElementById('auth-screen');
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const loginTab = document.getElementById('login-tab');
+    const signupTab = document.getElementById('signup-tab');
+    const authError = document.getElementById('auth-error');
+    const authSuccess = document.getElementById('auth-success');
+    const loginButton = document.getElementById('login-button');
+    const signupButton = document.getElementById('signup-button');
+    const rememberMe = document.getElementById('remember-me');
+    const forgotPassword = document.getElementById('forgot-password');
+    const userEmailDisplay = document.getElementById('user-email-display');
+    const emailVerifiedBadge = document.getElementById('email-verified-badge');
+    const logoutAction = document.getElementById('logout-action');
     const pages = document.querySelectorAll('.page');
     const navItems = document.querySelectorAll('.nav-item');
     const modalOverlay = document.getElementById('modal-overlay');
@@ -1903,6 +2142,333 @@
     let audioDuration = 0;
     let audioElement = null;
     let audioObjectUrl = null;
+
+    function showLoginScreen(message = '') {
+      if (authScreen) authScreen.style.display = 'flex';
+      if (appContainer) appContainer.style.display = 'none';
+      if (message) {
+        authError.textContent = message;
+        authError.style.display = 'block';
+      }
+    }
+
+    function showMainApp() {
+      if (authScreen) authScreen.style.display = 'none';
+      if (appContainer) appContainer.style.display = 'block';
+      switchPage('home');
+    }
+
+    function toggleAuthForms(showSignup) {
+      if (!loginForm || !signupForm) return;
+      loginForm.style.display = showSignup ? 'none' : 'flex';
+      signupForm.style.display = showSignup ? 'flex' : 'none';
+      loginTab.classList.toggle('active', !showSignup);
+      signupTab.classList.toggle('active', showSignup);
+      const title = document.getElementById('auth-title');
+      const subtitle = document.getElementById('auth-subtitle');
+      if (title) title.textContent = showSignup ? 'Crea tu cuenta' : 'Bienvenido de vuelta';
+      if (subtitle) subtitle.textContent = showSignup ? 'Regístrate para guardar tus documentos en la nube' : 'Inicia sesión para acceder a tu biblioteca';
+      authError.style.display = 'none';
+      authSuccess.style.display = 'none';
+    }
+
+    function setButtonLoading(button, isLoading, label) {
+      if (!button) return;
+      if (!button.dataset.defaultLabel) button.dataset.defaultLabel = button.textContent;
+      button.disabled = isLoading;
+      button.innerHTML = isLoading ? `<div class="auth-loader"></div> ${label || 'Cargando...'}` : button.dataset.defaultLabel;
+    }
+
+    function validateEmailFormat(email) {
+      const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return regex.test(email);
+    }
+
+    function updateAccountInfo(user) {
+      if (userEmailDisplay) userEmailDisplay.textContent = user?.email || 'Sin sesión';
+      if (emailVerifiedBadge) {
+        emailVerifiedBadge.textContent = user?.emailVerified ? 'Email verificado ✅' : 'Verifica tu email para continuar';
+        emailVerifiedBadge.style.color = user?.emailVerified ? '#1B8E5A' : '#C0392B';
+      }
+    }
+
+    async function signupUser(email, password) {
+      try {
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        await user.sendEmailVerification();
+        await firebase.firestore().collection('users').doc(user.uid).set({
+          email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          emailVerified: false
+        });
+        return { success: true, message: 'Cuenta creada. Revisa tu email para verificar.' };
+      } catch (error) {
+        return { success: false, message: errorMessages[error.code] || error.message };
+      }
+    }
+
+    async function loginUser(email, password, remember) {
+      try {
+        const persistence = remember ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+        await firebase.auth().setPersistence(persistence);
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        if (!user.emailVerified) {
+          await firebase.auth().signOut();
+          return { success: false, message: 'Por favor verifica tu email antes de continuar.' };
+        }
+        return { success: true, user };
+      } catch (error) {
+        return { success: false, message: errorMessages[error.code] || error.message };
+      }
+    }
+
+    async function logoutUser() {
+      await firebase.auth().signOut();
+      await clearLocalDocumentos();
+      documentos = [];
+      renderDocumentos();
+      showLoginScreen();
+    }
+
+    async function createTestAccount() {
+      const flagKey = 'testAccountCreated';
+      if (localStorage.getItem(flagKey) === 'true') return;
+      try {
+        const result = await signupUser('danieltrigre7@gmail.com', 'rafadfani77');
+        console.log('Test account creation result:', result.message);
+        localStorage.setItem(flagKey, 'true');
+      } catch (error) {
+        console.log('Test account may already exist:', error.message);
+        localStorage.setItem(flagKey, 'true');
+      }
+    }
+
+    async function saveUserDocument(userId, docData) {
+      const docRef = await firebase.firestore().collection('documents').add({
+        userId,
+        title: docData.title,
+        text: docData.text,
+        voice: docData.voice || 'Selena',
+        speed: docData.speed || 1.0,
+        miniatura: docData.miniatura,
+        duracion: docData.duracion,
+        estado: docData.estado || 'todo',
+        favorito: !!docData.favorito,
+        posicionReproduccion: docData.posicionReproduccion || 0,
+        tipo: docData.tipo || 'texto',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return docRef.id;
+    }
+
+    async function loadUserDocuments(userId) {
+      const snapshot = await firebase.firestore()
+        .collection('documents')
+        .where('userId', '==', userId)
+        .orderBy('updatedAt', 'desc')
+        .get();
+
+      const documents = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        documents.push({
+          id: doc.id,
+          userId,
+          titulo: data.title || data.titulo || 'Documento',
+          texto: data.text || data.texto || '',
+          vozSeleccionada: data.voice || data.voz || 'Sasha',
+          velocidad: data.speed || data.velocidad || 1.0,
+          duracion: data.duracion || calcularDuracion(data.text || data.texto || ''),
+          miniatura: data.miniatura || 'https://placehold.co/60x60/F5F5F5/666?text=📄',
+          estado: data.estado || 'todo',
+          favorito: !!data.favorito,
+          posicionReproduccion: data.posicionReproduccion || 0,
+          fecha: data.updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString(),
+          tipo: data.tipo || 'texto'
+        });
+      });
+
+      return documents;
+    }
+
+    async function updateFirestoreDocument(id, updates) {
+      const payload = { ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      return firebase.firestore().collection('documents').doc(id).update(payload);
+    }
+
+    async function deleteFirestoreDocument(id) {
+      return firebase.firestore().collection('documents').doc(id).delete();
+    }
+
+    async function syncUserDocuments(userId) {
+      try {
+        toggleLoader(true, 'Cargando tu biblioteca', 'Sincronizando documentos de tu cuenta...');
+        const docs = await loadUserDocuments(userId);
+        await clearLocalDocumentos();
+        for (const doc of docs) {
+          await addDocumento(doc);
+        }
+        documentos = await getDocumentos(userId);
+        renderDocumentos();
+      } catch (error) {
+        console.error('Error sincronizando documentos:', error);
+        mostrarPopupError('No pudimos cargar tus documentos. Intenta de nuevo.');
+      } finally {
+        toggleLoader(false);
+      }
+    }
+
+    async function guardarDocumentoUsuario(doc) {
+      if (!currentUser || !currentUser.emailVerified) {
+        showLoginScreen('Inicia sesión y verifica tu email para guardar tus documentos');
+        mostrarPopupError('Inicia sesión para guardar y sincronizar tus audios');
+        return null;
+      }
+
+      const docData = {
+        userId: currentUser.uid,
+        title: doc.titulo,
+        text: doc.texto,
+        voice: doc.vozSeleccionada || vozSeleccionada,
+        speed: doc.velocidad || velocidadActual,
+        miniatura: doc.miniatura,
+        duracion: doc.duracion,
+        estado: doc.estado || 'todo',
+        favorito: doc.favorito || false,
+        posicionReproduccion: doc.posicionReproduccion || 0,
+        tipo: doc.tipo || 'texto'
+      };
+
+      const firestoreId = await saveUserDocument(currentUser.uid, docData);
+      const localDoc = { ...doc, id: firestoreId, userId: currentUser.uid };
+      await addDocumento(localDoc);
+      documentos = await getDocumentos(currentUser.uid);
+      renderDocumentos();
+      mostrarPopupExito('Documento guardado en tu cuenta');
+      return firestoreId;
+    }
+
+    function setupAuthListeners() {
+      if (loginTab && signupTab) {
+        loginTab.addEventListener('click', () => toggleAuthForms(false));
+        signupTab.addEventListener('click', () => toggleAuthForms(true));
+      }
+
+      if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('signup-email').value.trim();
+          const password = document.getElementById('signup-password').value.trim();
+          const confirm = document.getElementById('signup-confirm').value.trim();
+
+          if (!validateEmailFormat(email)) {
+            authError.textContent = 'Email inválido';
+            authError.style.display = 'block';
+            return;
+          }
+
+          if (password.length < 6) {
+            authError.textContent = 'Contraseña muy débil (mínimo 6 caracteres)';
+            authError.style.display = 'block';
+            return;
+          }
+
+          if (password !== confirm) {
+            authError.textContent = 'Las contraseñas no coinciden';
+            authError.style.display = 'block';
+            return;
+          }
+
+          setButtonLoading(signupButton, true, 'Creando cuenta');
+          const { success, message } = await signupUser(email, password);
+          setButtonLoading(signupButton, false);
+          if (success) {
+            authError.style.display = 'none';
+            authSuccess.textContent = message;
+            authSuccess.style.display = 'block';
+          } else {
+            authSuccess.style.display = 'none';
+            authError.textContent = message;
+            authError.style.display = 'block';
+          }
+        });
+      }
+
+      if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('login-email').value.trim();
+          const password = document.getElementById('login-password').value.trim();
+
+          if (!validateEmailFormat(email)) {
+            authError.textContent = 'Email inválido';
+            authError.style.display = 'block';
+            return;
+          }
+
+          setButtonLoading(loginButton, true, 'Iniciando sesión');
+          const { success, message } = await loginUser(email, password, rememberMe?.checked);
+          setButtonLoading(loginButton, false);
+
+          if (success) {
+            authError.style.display = 'none';
+            authSuccess.textContent = 'Bienvenido de vuelta!';
+            authSuccess.style.display = 'block';
+          } else {
+            authSuccess.style.display = 'none';
+            authError.textContent = message;
+            authError.style.display = 'block';
+          }
+        });
+      }
+
+      if (forgotPassword) {
+        forgotPassword.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const email = document.getElementById('login-email').value.trim();
+          if (!validateEmailFormat(email)) {
+            authError.textContent = 'Ingresa un email válido para recuperar tu contraseña';
+            authError.style.display = 'block';
+            return;
+          }
+          try {
+            await firebase.auth().sendPasswordResetEmail(email);
+            authError.style.display = 'none';
+            authSuccess.textContent = 'Revisa tu correo para restablecer la contraseña';
+            authSuccess.style.display = 'block';
+          } catch (error) {
+            authSuccess.style.display = 'none';
+            authError.textContent = errorMessages[error.code] || error.message;
+            authError.style.display = 'block';
+          }
+        });
+      }
+
+      if (logoutAction) {
+        logoutAction.addEventListener('click', () => {
+          mostrarPopupConfirmacion('Cerrar Sesión', '¿Seguro que quieres salir de tu cuenta?', logoutUser);
+        });
+      }
+    }
+
+    function initializeAuthWatcher() {
+      firebase.auth().onAuthStateChanged(async (user) => {
+        currentUser = user;
+        authInitialized = true;
+        updateAccountInfo(user);
+
+        if (user && user.emailVerified) {
+          showMainApp();
+          await syncUserDocuments(user.uid);
+          mostrarPopupExito('Sesión iniciada correctamente');
+        } else {
+          showLoginScreen(user ? 'Por favor verifica tu email antes de continuar.' : 'Inicia sesión para continuar');
+        }
+      });
+    }
 
     const VOICE_CONFIG = {
       'Sasha': {
@@ -2576,7 +3142,11 @@
     }
 
     async function renderDocumentos() {
-      documentos = await getDocumentos();
+      if (!currentUser || !currentUser.emailVerified) {
+        docList.innerHTML = '<p style="padding:16px; color:#666;">Inicia sesión para ver tus documentos.</p>';
+        return;
+      }
+      documentos = await getDocumentos(currentUser.uid);
       docList.innerHTML = '';
       documentos.filter(filtrarDoc).forEach((doc) => docList.appendChild(crearDocumentoItem(doc)));
     }
@@ -3158,8 +3728,7 @@
         vozSeleccionada,
         velocidad: velocidadActual,
       };
-      await addDocumento(doc);
-      renderDocumentos();
+      await guardarDocumentoUsuario(doc);
       switchPage('library');
     }
 
@@ -3231,8 +3800,12 @@
       // ✅ FORZAR PÁGINA INICIAL
       switchPage('home');
       console.log('✅ Página inicial: home');
+      showLoginScreen();
 
       bindCardEvents();
+      setupAuthListeners();
+      initializeAuthWatcher();
+      createTestAccount();
       await inicializarAPIKey();
 
       // ✅ BOTÓN DE API KEY EN HEADER
@@ -3257,7 +3830,6 @@
       loadVoices(() => renderVoices());
       setSpeed(velocidadActual);
       actualizarAvatarVoz(vozSeleccionada);
-      renderDocumentos();
 
       // ✅ AÑADIR ESTA SECCIÓN DESPUÉS DE LA INICIALIZACIÓN EXISTENTE
 
