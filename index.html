@@ -1751,6 +1751,8 @@
 
     const TRANSLATIONS = {
       'es': {
+        'appTitle': 'Listen AI Clone',
+        'languageUpdated': 'Idioma actualizado',
         'nav.home': 'Inicio',
         'nav.library': 'Mi Biblioteca',
         'nav.settings': 'Configuraciones',
@@ -1775,6 +1777,8 @@
         'settings.language': 'Idioma de la aplicación'
       },
       'en': {
+        'appTitle': 'Listen AI Clone',
+        'languageUpdated': 'Language updated',
         'nav.home': 'Home',
         'nav.library': 'My Library',
         'nav.settings': 'Settings',
@@ -1799,6 +1803,8 @@
         'settings.language': 'App Language'
       },
       'pt': {
+        'appTitle': 'Listen AI Clone',
+        'languageUpdated': 'Idioma atualizado',
         'nav.home': 'Início',
         'nav.library': 'Minha Biblioteca',
         'nav.settings': 'Configurações',
@@ -1809,6 +1815,8 @@
         'settings.language': 'Idioma do aplicativo'
       },
       'fr': {
+        'appTitle': 'Listen AI Clone',
+        'languageUpdated': 'Langue mise à jour',
         'nav.home': 'Accueil',
         'nav.library': 'Ma Bibliothèque',
         'nav.settings': 'Paramètres',
@@ -1830,9 +1838,82 @@
     TRANSLATIONS['zh'] = TRANSLATIONS['en'];
 
     let currentLanguage = localStorage.getItem('appLanguage') || 'es';
+    document.documentElement.lang = currentLanguage;
 
     function t(key) {
       return TRANSLATIONS[currentLanguage]?.[key] || TRANSLATIONS['es'][key] || key;
+    }
+
+    function getTranslation(key, lang = currentLanguage) {
+      const languageKey = TRANSLATIONS[lang] ? lang : lang?.split('-')?.[0];
+      const translations = TRANSLATIONS[languageKey] || TRANSLATIONS['es'] || {};
+
+      if (translations[key]) return translations[key];
+
+      if (key.includes('.')) {
+        const parts = key.split('.');
+        let value = translations;
+        for (const part of parts) {
+          value = value?.[part];
+        }
+        if (typeof value === 'string') return value;
+      }
+
+      return TRANSLATIONS['es']?.[key] || null;
+    }
+
+    function updateUITranslations(lang = currentLanguage) {
+      document.querySelectorAll('[data-i18n]').forEach((element) => {
+        const key = element.getAttribute('data-i18n');
+        const translation = getTranslation(key, lang);
+        if (translation) {
+          element.textContent = translation;
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        const translation = getTranslation(key, lang);
+        if (translation) {
+          element.placeholder = translation;
+        }
+      });
+
+      const pageTitle = document.querySelector('title');
+      const translatedTitle = getTranslation('appTitle', lang);
+      if (pageTitle && translatedTitle) {
+        pageTitle.textContent = translatedTitle;
+      }
+
+      if (typeof actualizarTextos === 'function') {
+        actualizarTextos();
+      }
+    }
+
+    function updateLanguage(lang) {
+      try {
+        if (!TRANSLATIONS[lang]) {
+          console.error('❌ Idioma no soportado:', lang);
+          return;
+        }
+
+        currentLanguage = lang;
+        document.documentElement.lang = lang;
+        localStorage.setItem('appLanguage', lang);
+
+        updateUITranslations(lang);
+
+        if (typeof renderVoices === 'function') {
+          renderVoices();
+        }
+
+        const successMessage = getTranslation('languageUpdated', lang) || 'Idioma actualizado';
+        mostrarPopupExito(successMessage);
+        console.log(`Idioma actualizado a: ${lang}`);
+      } catch (error) {
+        console.error('Error al actualizar idioma:', error);
+        mostrarPopupError('Error al actualizar idioma');
+      }
     }
 
     // --- Utilidades de popups y dependencias ---
@@ -2003,21 +2084,7 @@
     }
 
     function cambiarIdioma(nuevoIdioma) {
-      if (!TRANSLATIONS[nuevoIdioma]) {
-        console.error('❌ Idioma no soportado:', nuevoIdioma);
-        return;
-      }
-      
-      currentLanguage = nuevoIdioma;
-      localStorage.setItem('appLanguage', nuevoIdioma);
-      
-      console.log('✅ Idioma cambiado a:', nuevoIdioma);
-      
-      // Actualizar toda la interfaz
-      actualizarTextos();
-      
-      // Notificar al usuario
-      mostrarPopupExito('✅ Idioma actualizado');
+      updateLanguage(nuevoIdioma);
     }
     
     function abrirModalIdiomas() {
@@ -5275,7 +5342,7 @@
       }
 
       // Inicializar textos en el idioma actual
-      actualizarTextos();
+      updateUITranslations(currentLanguage);
       console.log('✅ Idioma inicializado:', currentLanguage);
     });
   </script>
