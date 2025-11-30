@@ -337,9 +337,28 @@
     .footer-player { display: flex; justify-content: space-between; align-items: center; padding: 0 12px; }
     .speed-control button { background: #FFF3E0; border: 1px solid var(--amarillo-principal); border-radius: 24px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
     .voice-control { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
-    .voice-control .avatar { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; }
+    .voice-control .avatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; }
     .voice-control img { width: 100%; height: 100%; object-fit: cover; }
     .voice-control small { font-size: 14px; font-weight: 600; }
+
+    .voice-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #ddd;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .voice-avatar:hover {
+      transform: scale(1.1);
+      border-color: var(--naranja-principal);
+    }
+
+    .voice-item.selected .voice-avatar {
+      border-color: var(--naranja-principal);
+      box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.2);
+    }
 
     .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 60px; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-around; align-items: center; z-index: 20; }
     .nav-item { flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #999; font-size: 12px; padding-top: 4px; position: relative; }
@@ -373,9 +392,11 @@
     .lista-voces { display: flex; flex-direction: column; gap: 12px; }
     .voz-card { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 16px; background: linear-gradient(180deg, #FFFDFC, #FFF6EA); border: 2.5px solid transparent; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
     .voz-card.activa { border-color: var(--amarillo-dorado); box-shadow: 0 6px 16px rgba(255,184,0,0.18); }
-    .avatar-circular { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid #FFE0B2; }
-    .avatar-circular img { width: 100%; height: 100%; object-fit: cover; }
-    .info-voz h4 { font-size: 17px; font-weight: 700; }
+    .voice-avatar-wrapper { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 80px; }
+    .voice-language { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #fff; background: #2C3E50; padding: 4px 8px; border-radius: 999px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); letter-spacing: 0.3px; }
+    .voice-name { font-size: 14px; font-weight: 700; color: var(--texto-negro); text-align: center; }
+    .info-voz { flex: 1; }
+    .info-voz h4 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
     .info-voz p { font-size: 13px; color: var(--texto-gris); margin-top: 2px; }
     .onda-sonido { color: #FFC766; letter-spacing: 1px; margin-top: 4px; font-weight: 700; }
     .btn-play { margin-left: auto; width: 42px; height: 42px; border-radius: 50%; background: var(--amarillo-principal); border: none; cursor: pointer; font-size: 18px; color: #fff; box-shadow: 0 6px 14px rgba(255,184,0,0.35); }
@@ -1136,7 +1157,7 @@
             </div>
             <div class="voice-control" id="voice-btn">
               <div class="avatar">
-                <img src="https://i.pravatar.cc/150?img=32" alt="Sasha" onerror="this.src='https://placehold.co/56x56'" />
+                <img class="voice-avatar" src="https://i.pravatar.cc/256?img=32" alt="Sasha" onerror="this.src='https://placehold.co/64x64'" />
               </div>
               <small>Sasha</small>
             </div>
@@ -3705,65 +3726,173 @@
       {
         id: 'sasha',
         nombre: 'Sasha',
-        desc: 'Google Cloud TTS • Español',
+        desc: 'Español europeo • tono natural y claro',
         gender: 'femenino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-A',
-        avatar: 'https://ui-avatars.com/api/?name=Sasha&background=FF6B9D&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=32'
       },
       {
         id: 'selena',
         nombre: 'Selena',
-        desc: 'Google Cloud TTS • Español',
+        desc: 'Español europeo • tono cálido',
         gender: 'femenino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-C',
-        avatar: 'https://ui-avatars.com/api/?name=Selena&background=9B59B6&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=15'
       },
       {
         id: 'ariel',
         nombre: 'Ariel',
-        desc: 'Google Cloud TTS • Español',
+        desc: 'Español europeo • tono cercano',
         gender: 'masculino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-B',
-        avatar: 'https://ui-avatars.com/api/?name=Ariel&background=3498DB&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=57'
       },
       {
         id: 'alex',
         nombre: 'Alex',
-        desc: 'Google Cloud TTS • Español',
+        desc: 'Español europeo • tono balanceado',
         gender: 'masculino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-D',
-        avatar: 'https://ui-avatars.com/api/?name=Alex&background=2ECC71&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=12'
+      },
+      {
+        id: 'lucia',
+        nombre: 'Lucia',
+        desc: 'Español europeo • tono profesional',
+        gender: 'femenino',
+        languageCode: 'es-ES',
+        googleVoice: 'es-ES-Neural2-F',
+        avatar: 'https://i.pravatar.cc/256?img=68'
+      },
+      {
+        id: 'carlos',
+        nombre: 'Carlos',
+        desc: 'Español europeo • tono grave',
+        gender: 'masculino',
+        languageCode: 'es-ES',
+        googleVoice: 'es-ES-Neural2-B',
+        avatar: 'https://i.pravatar.cc/256?img=14'
+      },
+      {
+        id: 'sofia',
+        nombre: 'Sofia',
+        desc: 'Español latino • tono amigable',
+        gender: 'femenino',
+        languageCode: 'es-US',
+        googleVoice: 'es-US-Neural2-A',
+        avatar: 'https://i.pravatar.cc/256?img=26'
+      },
+      {
+        id: 'diego',
+        nombre: 'Diego',
+        desc: 'Español latino • tono dinámico',
+        gender: 'masculino',
+        languageCode: 'es-US',
+        googleVoice: 'es-US-Neural2-B',
+        avatar: 'https://i.pravatar.cc/256?img=49'
+      },
+      {
+        id: 'valentina',
+        nombre: 'Valentina',
+        desc: 'Español europeo • tono juvenil',
+        gender: 'femenino',
+        languageCode: 'es-ES',
+        googleVoice: 'es-ES-Neural2-E',
+        avatar: 'https://i.pravatar.cc/256?img=5'
+      },
+      {
+        id: 'miguel',
+        nombre: 'Miguel',
+        desc: 'Español europeo • tono maduro',
+        gender: 'masculino',
+        languageCode: 'es-ES',
+        googleVoice: 'es-ES-Neural2-C',
+        avatar: 'https://i.pravatar.cc/256?img=34'
       },
       {
         id: 'sam',
         nombre: 'Sam',
-        desc: 'Google Cloud TTS • Inglés',
+        desc: 'Inglés americano • tono equilibrado',
         gender: 'masculino',
         languageCode: 'en-US',
         googleVoice: 'en-US-Neural2-J',
-        avatar: 'https://ui-avatars.com/api/?name=Sam&background=E67E22&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=1'
       },
       {
         id: 'robin',
         nombre: 'Robin',
-        desc: 'Google Cloud TTS • Inglés',
+        desc: 'Inglés americano • tono amable',
         gender: 'femenino',
         languageCode: 'en-US',
         googleVoice: 'en-US-Neural2-H',
-        avatar: 'https://ui-avatars.com/api/?name=Robin&background=E74C3C&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=8'
       },
       {
         id: 'emery',
         nombre: 'Emery',
-        desc: 'Google Cloud TTS • Inglés',
+        desc: 'Inglés americano • tono sereno',
         gender: 'femenino',
         languageCode: 'en-US',
         googleVoice: 'en-US-Neural2-F',
-        avatar: 'https://ui-avatars.com/api/?name=Emery&background=1ABC9C&color=fff&size=128'
+        avatar: 'https://i.pravatar.cc/256?img=47'
+      },
+      {
+        id: 'emma',
+        nombre: 'Emma',
+        desc: 'Inglés americano • tono claro',
+        gender: 'femenino',
+        languageCode: 'en-US',
+        googleVoice: 'en-US-Neural2-C',
+        avatar: 'https://i.pravatar.cc/256?img=3'
+      },
+      {
+        id: 'liam',
+        nombre: 'Liam',
+        desc: 'Inglés americano • tono profesional',
+        gender: 'masculino',
+        languageCode: 'en-US',
+        googleVoice: 'en-US-Neural2-D',
+        avatar: 'https://i.pravatar.cc/256?img=58'
+      },
+      {
+        id: 'olivia',
+        nombre: 'Olivia',
+        desc: 'Inglés americano • tono energético',
+        gender: 'femenino',
+        languageCode: 'en-US',
+        googleVoice: 'en-US-Neural2-E',
+        avatar: 'https://i.pravatar.cc/256?img=21'
+      },
+      {
+        id: 'noah',
+        nombre: 'Noah',
+        desc: 'Inglés americano • tono cálido',
+        gender: 'masculino',
+        languageCode: 'en-US',
+        googleVoice: 'en-US-Neural2-I',
+        avatar: 'https://i.pravatar.cc/256?img=10'
+      },
+      {
+        id: 'ava',
+        nombre: 'Ava',
+        desc: 'Inglés británico • tono elegante',
+        gender: 'femenino',
+        languageCode: 'en-GB',
+        googleVoice: 'en-GB-Neural2-A',
+        avatar: 'https://i.pravatar.cc/256?img=9'
+      },
+      {
+        id: 'james',
+        nombre: 'James',
+        desc: 'Inglés británico • tono distinguido',
+        gender: 'masculino',
+        languageCode: 'en-GB',
+        googleVoice: 'en-GB-Neural2-B',
+        avatar: 'https://i.pravatar.cc/256?img=43'
       }
     ];
 
@@ -4301,10 +4430,19 @@
       updateVoiceLabels(vozSeleccionada);
 
       availableVoices.forEach((voz) => {
+        const languageBadge = voz.languageCode?.startsWith('en-GB')
+          ? 'GB'
+          : voz.languageCode?.startsWith('en')
+            ? 'EN'
+            : 'ES';
         const card = document.createElement('div');
         card.className = 'voz-card' + (voz.nombre === vozSeleccionada ? ' activa' : '');
         card.innerHTML = `
-          <div class="avatar-circular"><img src="${voz.avatar}" alt="${voz.nombre}" onerror="this.src='https://placehold.co/64x64'"/></div>
+          <div class="voice-avatar-wrapper">
+            <span class="voice-language">${languageBadge}</span>
+            <img class="voice-avatar" src="${voz.avatar}" alt="${voz.nombre}" onerror="this.src='https://placehold.co/64x64'" />
+            <div class="voice-name">${voz.nombre}</div>
+          </div>
           <div class="info-voz"><h4>${voz.nombre}</h4><p>${voz.desc || 'Disponible para todos'}</p><div class="onda-sonido">|||||||||||||||||||||</div></div>
           <button class="btn-play">▶</button>
         `;
