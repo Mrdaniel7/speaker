@@ -2163,7 +2163,14 @@
     async function speakNatural(texto, vozNombre, velocidad = 1.0, options = {}) {
       const { silenciarErrores = false } = options;
       const vozConfig = VOICE_CONFIG[vozNombre] || getAvailableVoices().find((v) => v.nombre === vozNombre);
-      const apiKey = userGoogleTTSKey;
+      let apiKey = userGoogleTTSKey;
+
+      if (!apiKey && currentUser?.uid && isFirebaseAvailable()) {
+        apiKey = await getUserAPIKey(currentUser.uid);
+        if (apiKey) {
+          await setStoredApiKey(apiKey);
+        }
+      }
 
       if (!apiKey) {
         console.warn('⚠️ No API Key - usando voces del navegador');
@@ -2250,8 +2257,9 @@
         audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
 
         console.log('✅ Audio generado con Google TTS Neural2');
+        setVoiceSystem('google', vozConfig?.nombre || vozNombre);
         return audio;
-        
+
       } catch (error) {
         console.error('❌ Error en síntesis de voz:', error);
         if (!silenciarErrores) mostrarPopupError(`Error al generar audio: ${error.message}`);
@@ -2282,6 +2290,14 @@
         let selectedVoice = voices.find(v => v.lang === lang);
         if (!selectedVoice) selectedVoice = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
         if (!selectedVoice) selectedVoice = voices[0];
+
+        const voiceLabel = selectedVoice?.name || vozConfig?.nombre || vozSeleccionada;
+        if (!userGoogleTTSKey) {
+          vozSeleccionada = voiceLabel;
+          localStorage.setItem('vozSeleccionada', vozSeleccionada);
+        }
+        setVoiceSystem('browser', voiceLabel);
+        actualizarAvatarVoz(vozSeleccionada);
 
         utterance.voice = selectedVoice;
         utterance.rate = velocidad;
@@ -2593,6 +2609,7 @@
     let documentoActivo = null;
     let vozSeleccionada = localStorage.getItem('vozSeleccionada') || 'Sasha';
     let velocidadActual = Number(localStorage.getItem('velocidadActual') || 1.0);
+    let voiceSystem = 'browser';
     let lecturaTimer = null;
     let lecturaInicio = null;
     let palabrasTotales = 0;
@@ -3031,6 +3048,7 @@
       await clearLocalDocumentos();
       documentos = [];
       userGoogleTTSKey = null;
+      setVoiceSystem('browser');
       updateApiKeySettingsUI();
       renderDocumentos();
       showLoginScreen();
@@ -3509,55 +3527,55 @@
     const VOICE_CONFIG = {
       'Sasha': {
         nombre: 'Sasha',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Español',
         avatar: 'https://i.pravatar.cc/150?img=32',
-        googleVoice: 'es-ES-Neural2-C',
+        googleVoice: 'es-ES-Neural2-A',
         languageCode: 'es-ES',
         gender: 'FEMALE'
       },
       'Selena': {
         nombre: 'Selena',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Español',
         avatar: 'https://i.pravatar.cc/150?img=45',
-        googleVoice: 'es-ES-Neural2-A',
+        googleVoice: 'es-ES-Neural2-C',
         languageCode: 'es-ES',
         gender: 'FEMALE'
       },
       'Ariel': {
         nombre: 'Ariel',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Español',
         avatar: 'https://i.pravatar.cc/150?img=12',
-        googleVoice: 'es-ES-Neural2-D',
+        googleVoice: 'es-ES-Neural2-B',
         languageCode: 'es-ES',
         gender: 'MALE'
       },
       'Alex': {
         nombre: 'Alex',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Español',
         avatar: 'https://i.pravatar.cc/150?img=33',
-        googleVoice: 'es-ES-Neural2-B',
+        googleVoice: 'es-ES-Neural2-D',
         languageCode: 'es-ES',
         gender: 'MALE'
       },
       'Sam': {
         nombre: 'Sam',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Inglés',
         avatar: 'https://i.pravatar.cc/150?img=52',
-        googleVoice: 'en-US-Neural2-D',
+        googleVoice: 'en-US-Neural2-J',
         languageCode: 'en-US',
         gender: 'MALE'
       },
       'Robin': {
         nombre: 'Robin',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Inglés',
         avatar: 'https://i.pravatar.cc/150?img=48',
-        googleVoice: 'en-GB-Neural2-C',
-        languageCode: 'en-GB',
+        googleVoice: 'en-US-Neural2-H',
+        languageCode: 'en-US',
         gender: 'FEMALE'
       },
       'Emery': {
         nombre: 'Emery',
-        desc: 'Disponible para todos',
+        desc: 'Google Cloud TTS • Inglés',
         avatar: 'https://i.pravatar.cc/150?img=47',
         googleVoice: 'en-US-Neural2-F',
         languageCode: 'en-US',
@@ -3566,6 +3584,19 @@
     };
 
     const VOICES_DATA = Object.values(VOICE_CONFIG);
+
+    function updateVoiceLabels(nombre = vozSeleccionada) {
+      const selectedName = nombre || vozSeleccionada;
+      const systemLabel = voiceSystem === 'google' && userGoogleTTSKey ? 'Google Cloud TTS' : 'Voces del navegador';
+      const voiceBtnLabel = voiceBtn?.querySelector('small');
+      if (voiceBtnLabel) voiceBtnLabel.textContent = `${selectedName} · ${systemLabel}`;
+      if (vozActualLabel) vozActualLabel.textContent = `${selectedName} · ${systemLabel}`;
+    }
+
+    function setVoiceSystem(system, nombre = vozSeleccionada) {
+      voiceSystem = system === 'google' && userGoogleTTSKey ? 'google' : 'browser';
+      updateVoiceLabels(nombre);
+    }
 
     const getStoredApiKey = () => userGoogleTTSKey;
     const setStoredApiKey = async (key) => {
@@ -3581,14 +3612,19 @@
         }
       }
       userGoogleTTSKey = key;
+      setVoiceSystem(key ? 'google' : 'browser');
       window.dispatchEvent(new Event('apiKeyUpdated'));
     };
 
     function getAvailableVoices() {
-      if (userGoogleTTSKey) return VOICES_DATA;
+      if (userGoogleTTSKey) {
+        return VOICES_DATA;
+      }
 
       const browserVoices = window.speechSynthesis?.getVoices?.() || [];
-      if (!browserVoices.length) return VOICES_DATA;
+      if (!browserVoices.length) {
+        return VOICES_DATA;
+      }
 
       return browserVoices.map((voz) => ({
         nombre: voz.name,
@@ -3717,10 +3753,11 @@
         const userDoc = await firebase.firestore().collection('users').doc(userId).get();
         const data = userDoc.data() || {};
         userGoogleTTSKey = data.googleTTSKey || await getUserAPIKey(userId);
+        setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser');
         const prefs = data.preferences || {};
         if (prefs.voice) {
           vozSeleccionada = prefs.voice;
-          document.getElementById('voz-actual').textContent = vozSeleccionada;
+          updateVoiceLabels(vozSeleccionada);
         }
         if (prefs.speed) {
           velocidadActual = prefs.speed;
@@ -3915,7 +3952,14 @@
       const skipAPIKey = isGuestMode
         ? localStorage.getItem(GUEST_SKIP_API_KEY_KEY) === 'true'
         : localStorage.getItem(`skipAPIKey_${currentUser?.uid}`) === 'true';
-      const candidateKey = isGuestMode ? getGuestAPIKey() : getStoredApiKey();
+      let candidateKey = isGuestMode ? getGuestAPIKey() : getStoredApiKey();
+
+      if (!candidateKey && currentUser?.uid && isFirebaseAvailable()) {
+        candidateKey = await getUserAPIKey(currentUser.uid);
+        if (candidateKey) {
+          userGoogleTTSKey = candidateKey;
+        }
+      }
 
       if (candidateKey && isGuestMode) {
         userGoogleTTSKey = candidateKey;
@@ -3939,6 +3983,7 @@
         if (valid) {
           await setStoredApiKey(candidateKey);
           actualizarEstadoAPIKeyUI(true);
+          setVoiceSystem('google');
           logDebug('API Key válida e inicializada');
           return true;
         }
@@ -3993,9 +4038,7 @@
       const avatarInfo = getAvailableVoices().find((v) => v.nombre === nombre);
       const img = voiceBtn.querySelector('img');
       if (img && avatarInfo) img.src = avatarInfo.avatar;
-      const label = voiceBtn.querySelector('small');
-      if (label) label.textContent = nombre;
-      vozActualLabel.textContent = nombre;
+      updateVoiceLabels(nombre);
     }
 
     function renderVoices() {
@@ -4004,7 +4047,11 @@
 
       if (!availableVoices.find((v) => v.nombre === vozSeleccionada)) {
         vozSeleccionada = availableVoices[0]?.nombre || vozSeleccionada;
+        localStorage.setItem('vozSeleccionada', vozSeleccionada);
       }
+
+      actualizarAvatarVoz(vozSeleccionada);
+      updateVoiceLabels(vozSeleccionada);
 
       availableVoices.forEach((voz) => {
         const card = document.createElement('div');
@@ -4020,6 +4067,7 @@
           localStorage.setItem('vozSeleccionada', vozSeleccionada);
           renderVoices();
           actualizarAvatarVoz(vozSeleccionada);
+          setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser', vozSeleccionada);
         });
         voiceList.appendChild(card);
       });
@@ -5202,6 +5250,7 @@
       loadVoices(() => renderVoices());
       setSpeed(velocidadActual);
       actualizarAvatarVoz(vozSeleccionada);
+      setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser');
 
       // ✅ AÑADIR ESTA SECCIÓN DESPUÉS DE LA INICIALIZACIÓN EXISTENTE
 
