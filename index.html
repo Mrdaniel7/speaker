@@ -1506,6 +1506,12 @@
 
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
+      console.log('🔥 Firebase inicializado', {
+        apiKeyPresent: !!firebaseConfig.apiKey,
+        authDomain: firebaseConfig.authDomain,
+        projectId: firebaseConfig.projectId,
+        storageBucket: firebaseConfig.storageBucket
+      });
     }
 
     const errorMessages = {
@@ -1596,6 +1602,13 @@
     const logDebug = (...args) => {
       if (DEBUG_MODE) console.log('[DEBUG]', ...args);
     };
+
+    const authLog = (...args) => console.log('🔐 [AUTH]', ...args);
+    const authStateLog = (...args) => console.log('👤 [AUTH STATE]', ...args);
+    const normalizeEmail = (email = '') => email.trim().toLowerCase();
+    const maskPassword = (password = '') => '*'.repeat(Math.min(password.length, 12));
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const retryableAuthErrors = ['auth/network-request-failed', 'auth/internal-error', 'auth/too-many-requests'];
 
     const TRANSLATIONS = {
       'es': {
@@ -2663,7 +2676,7 @@
     function showAuthErrorMessage(message, options = {}) {
       if (!authError) return;
       const normalizedOptions = typeof options === 'boolean' ? { includeSignupLink: options } : options;
-      const { includeSignupLink = false, includeLoginLink = false, loginEmail = '' } = normalizedOptions;
+      const { includeSignupLink = false, includeLoginLink = false, loginEmail = '', errorCode = '' } = normalizedOptions;
 
       const signupLink = includeSignupLink
         ? ` <button id="switch-to-signup" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Crear cuenta</button>`
@@ -2671,8 +2684,9 @@
       const loginLink = includeLoginLink
         ? ` <button id="switch-to-login" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Iniciar sesión</button>`
         : '';
+      const codeLabel = errorCode ? `<div style="margin-top:6px;font-size:12px;color:#8e44ad;">Código: ${errorCode}</div>` : '';
 
-      authError.innerHTML = `${message}${signupLink}${loginLink}`;
+      authError.innerHTML = `${message}${codeLabel}${signupLink}${loginLink}`;
       authError.style.display = 'block';
       authSuccess.style.display = 'none';
 
@@ -2720,15 +2734,22 @@
     }
 
     async function signupUser(email, password) {
+      const normalizedEmail = normalizeEmail(email);
+      const plainPassword = password ?? '';
+      authLog('🆕 Intentando registro', { normalizedEmail, passwordLength: plainPassword.length, maskedPassword: maskPassword(plainPassword) });
       try {
-        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(normalizedEmail, plainPassword);
         const user = userCredential.user;
+        authLog('✅ Cuenta creada', { uid: user.uid, emailVerified: user.emailVerified });
         await user.sendEmailVerification();
-        await firebase.firestore().collection('users').doc(user.uid).set({
-          email,
+        authLog('📧 Email de verificación enviado', { to: normalizedEmail });
+        const userDocRef = firebase.firestore().collection('users').doc(user.uid);
+        await userDocRef.set({
+          email: normalizedEmail,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           emailVerified: false
         });
+        await ensureUserSettings(user.uid, normalizedEmail, true);
         return { success: true, message: 'Cuenta creada y sesión iniciada. Revisa tu email para verificar.', user };
       } catch (error) {
         console.error('Error al crear cuenta:', error);
@@ -2737,17 +2758,59 @@
     }
 
     async function loginUser(email, password, remember) {
+      const normalizedEmail = normalizeEmail(email);
+      const plainPassword = password ?? '';
+      authLog('➡️ Intento de login', {
+        normalizedEmail,
+        passwordLength: plainPassword.length,
+        maskedPassword: maskPassword(plainPassword),
+        remember,
+        encodedPasswordSample: encodeURIComponent(plainPassword).slice(0, 20)
+      });
       try {
+        const methods = await firebase.auth().fetchSignInMethodsForEmail(normalizedEmail).catch(() => []);
+        authLog('📧 Métodos disponibles para email', { normalizedEmail, methods });
+        if (!methods.length) {
+          return { success: false, message: 'No existe una cuenta con este email. ¿Deseas crear una cuenta?', code: 'auth/user-not-found' };
+        }
+
         const persistence = remember ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
         await firebase.auth().setPersistence(persistence);
-        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        if (!user.emailVerified) {
-          console.warn('Email no verificado, se permite acceso pero se recomienda verificar.');
+        authLog('💾 Persistencia configurada', { persistence: remember ? 'LOCAL' : 'SESSION' });
+
+        const maxAttempts = 3;
+        let attempt = 0;
+        let lastError = null;
+
+        while (attempt < maxAttempts) {
+          attempt++;
+          try {
+            authLog('🔑 signInWithEmailAndPassword', { attempt, normalizedEmail });
+            const userCredential = await firebase.auth().signInWithEmailAndPassword(normalizedEmail, plainPassword);
+            const user = userCredential.user;
+            authLog('✅ Login exitoso', { uid: user.uid, emailVerified: user.emailVerified });
+            if (!user.emailVerified) {
+              console.warn('Email no verificado, se permite acceso pero se recomienda verificar.');
+            }
+            await ensureUserSettings(user.uid, normalizedEmail, false);
+            return {
+              success: true,
+              user,
+              message: user.emailVerified ? 'Sesión iniciada correctamente' : 'Sesión iniciada, verifica tu email para mayor seguridad.'
+            };
+          } catch (error) {
+            lastError = error;
+            authLog('❌ Fallo de login', { attempt, code: error.code, message: error.message });
+            if (!retryableAuthErrors.includes(error.code) || attempt >= maxAttempts) {
+              break;
+            }
+            const backoff = Math.pow(2, attempt) * 250;
+            authLog('⏳ Reintentando login con backoff', { nextAttempt: attempt + 1, backoffMs: backoff });
+            await wait(backoff);
+          }
         }
-        return { success: true, user, message: user.emailVerified ? 'Sesión iniciada correctamente' : 'Sesión iniciada, verifica tu email para mayor seguridad.' };
-      } catch (error) {
-        console.error('Error de inicio de sesión:', error);
+
+        const error = lastError || new Error('Error desconocido al iniciar sesión');
         let message = errorMessages[error.code] || error.message;
         if (error.code === 'auth/invalid-login-credentials') {
           message = 'Email o contraseña incorrectos. Si acabas de crear tu cuenta, intenta de nuevo.';
@@ -2756,22 +2819,30 @@
         } else if (error.code === 'auth/wrong-password') {
           message = 'Contraseña incorrecta. ¿Olvidaste tu contraseña?';
         } else if (error.code === 'auth/invalid-credential') {
-          const methods = await firebase.auth().fetchSignInMethodsForEmail(email).catch(() => []);
-          if (!methods.length) {
+          const refreshedMethods = await firebase.auth().fetchSignInMethodsForEmail(normalizedEmail).catch(() => []);
+          authLog('🔍 Métodos verificados tras error', { normalizedEmail, refreshedMethods });
+          if (!refreshedMethods.length) {
             message = 'No existe una cuenta con este email. ¿Deseas crear una cuenta?';
           }
+        } else if (error.code === 'auth/unverified-email') {
+          message = 'Tu email no está verificado. Revisa tu bandeja o solicita un nuevo enlace.';
         }
         return { success: false, message, code: error.code };
+      } catch (error) {
+        authLog('❌ Error inesperado en loginUser', { code: error.code, message: error.message });
+        return { success: false, message: errorMessages[error.code] || error.message, code: error.code };
       }
     }
 
     async function resetPassword(email) {
       try {
+        authLog('🔁 Solicitud de reset de contraseña', { email });
         await firebase.auth().sendPasswordResetEmail(email);
         authError.style.display = 'none';
         authSuccess.textContent = 'Email de recuperación enviado. Revisa tu bandeja de entrada.';
         authSuccess.style.display = 'block';
       } catch (error) {
+        authLog('❌ Error en reset de contraseña', { code: error.code, message: error.message });
         authSuccess.style.display = 'none';
         if (error.code === 'auth/user-not-found') {
           authError.textContent = 'No existe cuenta con este email.';
@@ -2783,6 +2854,7 @@
     }
 
     async function logoutUser() {
+      authLog('🚪 Cerrando sesión manualmente');
       await firebase.auth().signOut();
       await clearLocalDocumentos();
       documentos = [];
@@ -2828,11 +2900,30 @@
 
     async function getUserAPIKey(userId) {
       const docRef = await firebase.firestore().collection('userSettings').doc(userId).get();
+      authLog('🔎 Consultando API key guardada', { userId, exists: docRef.exists });
       if (docRef.exists) {
         const data = docRef.data();
         return data?.googleTTSKey || null;
       }
       return null;
+    }
+
+    async function ensureUserSettings(userId, email, fromSignup = false) {
+      const settingsRef = firebase.firestore().collection('userSettings').doc(userId);
+      const doc = await settingsRef.get();
+      if (doc.exists) {
+        authLog('⚙️ userSettings ya existe', { userId, fromSignup });
+        return doc.data();
+      }
+      const payload = {
+        email: email || null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        onboardingCompleted: false
+      };
+      authLog('🛠️ Creando userSettings faltante', { userId, fromSignup });
+      await settingsRef.set(payload);
+      return payload;
     }
 
     async function saveUserDocument(userId, docData) {
@@ -2855,6 +2946,7 @@
     }
 
     async function loadUserDocuments(userId) {
+      authLog('📂 Descargando documentos de usuario', { userId });
       const snapshot = await firebase.firestore()
         .collection('documents')
         .where('userId', '==', userId)
@@ -2881,6 +2973,7 @@
         });
       });
 
+      authLog('📚 Documentos cargados', { total: documents.length });
       return documents;
     }
 
@@ -2950,9 +3043,11 @@
       if (signupForm) {
         signupForm.addEventListener('submit', async (e) => {
           e.preventDefault();
-          const email = document.getElementById('signup-email').value.trim();
-          const password = document.getElementById('signup-password').value.trim();
-          const confirm = document.getElementById('signup-confirm').value.trim();
+          const rawEmail = document.getElementById('signup-email').value;
+          const email = normalizeEmail(rawEmail);
+          const password = document.getElementById('signup-password').value;
+          const confirm = document.getElementById('signup-confirm').value;
+          authLog('✉️ Email normalizado en signup', { rawEmail, normalizedEmail: email });
 
           if (!validateEmailFormat(email)) {
             showAuthErrorMessage('Email inválido');
@@ -2985,8 +3080,8 @@
             showAuthErrorMessage(
               message,
               emailExists
-                ? { includeLoginLink: true, loginEmail: email }
-                : { includeSignupLink: true }
+                ? { includeLoginLink: true, loginEmail: email, errorCode: code }
+                : { includeSignupLink: true, errorCode: code }
             );
           }
         });
@@ -2995,8 +3090,10 @@
       if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
           e.preventDefault();
-          const email = document.getElementById('login-email').value.trim();
-          const password = document.getElementById('login-password').value.trim();
+          const rawEmail = document.getElementById('login-email').value;
+          const email = normalizeEmail(rawEmail);
+          const password = document.getElementById('login-password').value;
+          authLog('✉️ Email normalizado en login', { rawEmail, normalizedEmail: email });
 
           if (!validateEmailFormat(email)) {
             showAuthErrorMessage('Email inválido');
@@ -3016,7 +3113,7 @@
           } else {
             authSuccess.style.display = 'none';
             const suggestSignup = ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code);
-            const options = suggestSignup ? { includeSignupLink: true } : {};
+            const options = suggestSignup ? { includeSignupLink: true, errorCode: code } : { errorCode: code };
             showAuthErrorMessage(message, options);
           }
         });
@@ -3025,7 +3122,8 @@
       if (forgotPassword) {
         forgotPassword.addEventListener('click', async (e) => {
           e.preventDefault();
-          const email = document.getElementById('login-email').value.trim();
+          const rawEmail = document.getElementById('login-email').value;
+          const email = normalizeEmail(rawEmail);
           if (!validateEmailFormat(email)) {
             authError.textContent = 'Ingresa un email válido para recuperar tu contraseña';
             authError.style.display = 'block';
@@ -3044,6 +3142,12 @@
 
     function initializeAuthWatcher() {
       firebase.auth().onAuthStateChanged(async (user) => {
+        authStateLog('onAuthStateChanged', {
+          userPresent: !!user,
+          email: user?.email,
+          emailVerified: user?.emailVerified,
+          lastLogin: user?.metadata?.lastSignInTime
+        });
         currentUser = user;
         authInitialized = true;
         textConfig = loadTextConfig();
@@ -3053,6 +3157,7 @@
 
         if (user) {
           showMainApp();
+          await ensureUserSettings(user.uid, user.email || currentUser?.email, false);
           await syncUserDocuments(user.uid);
           await loadUserSettings(user.uid);
           await inicializarAPIKey();
@@ -3061,6 +3166,7 @@
             mostrarPopupError('Tu email aún no está verificado. Revisa tu bandeja para mayor seguridad.');
           }
         } else {
+          authStateLog('🔁 Sesión cerrada, limpiando estado local');
           userGoogleTTSKey = null;
           updateApiKeySettingsUI();
           showLoginScreen('Inicia sesión para continuar');
@@ -3268,6 +3374,7 @@
 
     async function loadUserSettings(userId) {
       try {
+        authLog('📥 Cargando configuración de usuario', { userId });
         userGoogleTTSKey = await getUserAPIKey(userId);
         actualizarEstadoAPIKeyUI(!!userGoogleTTSKey);
         updateApiKeySettingsUI();
