@@ -3,7 +3,7 @@
   1. Al cargar la app se pedirá tu API Key de Google Cloud Text-to-Speech (gratis 1M caracteres/mes). Guárdala para voces naturales.
   2. Puedes cargar PDF/DOCX/TXT, escanear imágenes, pegar texto, URL o correos y se guardarán en IndexedDB.
   3. El reproductor sincroniza el resaltado de palabras, la barra de progreso es clickeable/arrastrable y puedes cambiar velocidad/voz.
-  4. Todas las funciones están habilitadas (sin PRO) y las voces muestran avatares realistas.
+  4. Todas las funciones están habilitadas y las voces muestran avatares realistas.
 -->
 <!DOCTYPE html>
 <html lang="es">
@@ -1025,7 +1025,6 @@
           <div class="carousel-dots">
             <span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span>
           </div>
-          <button class="btn-secondary" id="btn-free">Comenzar</button>
         </div>
         <div class="section-header">
           <h2>¿Qué quieres escuchar hoy?</h2>
@@ -1756,7 +1755,6 @@
         'nav.library': 'Mi Biblioteca',
         'nav.settings': 'Configuraciones',
         'home.banner.title': 'Obtén un resumen rápido de un archivo o pregunta al AI cualquier cosa',
-        'home.banner.button': 'Prueba gratis',
         'home.section.title': '¿Qué quieres escuchar hoy?',
         'home.document.title': 'Documento',
         'home.document.subtitle': 'Sube archivos desde Drive o dispositivo',
@@ -1781,7 +1779,6 @@
         'nav.library': 'My Library',
         'nav.settings': 'Settings',
         'home.banner.title': 'Get a quick summary of a file or ask AI anything',
-        'home.banner.button': 'Try for free',
         'home.section.title': 'What do you want to listen to today?',
         'home.document.title': 'Document',
         'home.document.subtitle': 'Upload files from Drive or device',
@@ -1806,7 +1803,6 @@
         'nav.library': 'Minha Biblioteca',
         'nav.settings': 'Configurações',
         'home.banner.title': 'Obtenha um resumo rápido de um arquivo ou pergunte qualquer coisa à IA',
-        'home.banner.button': 'Experimente grátis',
         'home.section.title': 'O que você quer ouvir hoje?',
         'library.title': 'Minha Biblioteca',
         'settings.title': 'Configurações',
@@ -1946,13 +1942,11 @@
       if (navHome) navHome.textContent = t('nav.home');
       if (navLibrary) navLibrary.textContent = t('nav.library');
       if (navSettings) navSettings.textContent = t('nav.settings');
-      
+
       // Banner
       const bannerText = document.querySelector('.promo-text p');
-      const btnFree = document.querySelector('#btn-free');
       if (bannerText) bannerText.textContent = t('home.banner.title');
-      if (btnFree) btnFree.textContent = t('home.banner.button');
-      
+
       // Título sección
       const sectionTitle = document.querySelector('.section-header h2');
       if (sectionTitle) sectionTitle.textContent = t('home.section.title');
