@@ -1159,6 +1159,11 @@
               <span>API Key de Google TTS</span>
               <span class="valor-actual" id="api-status-label">Sin configurar</span>
             </div>
+            <div class="config-item" data-action="config-firebase">
+              <div class="icono-config">☁️</div>
+              <span>Proyecto Firebase</span>
+              <span class="valor-actual" id="firebase-status-label">Sin configurar</span>
+            </div>
             <div class="config-item" data-action="cambiar-voz">
               <div class="icono-config">🔊</div>
               <span>Cambiar Voz</span>
@@ -1488,14 +1493,34 @@
     </div>
   </div>
 
+  <div id="firebase-config-modal" class="modal-overlay" style="display:none; align-items: center; justify-content: center;">
+    <div class="modal-api-key" style="background:#fff; padding:24px; border-radius:16px; max-width:520px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.15); position: relative;">
+      <button class="btn-cerrar" data-close="firebase-config" style="position:absolute; right:12px; top:12px;">×</button>
+      <h3 style="margin-top:0; margin-bottom:12px;">Proyecto de Firebase</h3>
+      <p id="firebase-config-hint" style="margin-top:0; color:#555;">Ingresa las credenciales de tu propio proyecto de Firebase para habilitar Firestore, Auth y Storage.</p>
+      <div style="display:grid; gap:10px; margin-top:12px;">
+        <label style="font-weight:600;">apiKey<input type="text" id="firebase-api-key" placeholder="AIza..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">authDomain<input type="text" id="firebase-auth-domain" placeholder="proyecto.firebaseapp.com" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">projectId<input type="text" id="firebase-project-id" placeholder="mi-proyecto" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">storageBucket<input type="text" id="firebase-storage-bucket" placeholder="mi-proyecto.appspot.com" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">messagingSenderId<input type="text" id="firebase-messaging-sender" placeholder="000000000000" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">appId<input type="text" id="firebase-app-id" placeholder="1:...:web:..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+        <label style="font-weight:600;">measurementId (opcional)<input type="text" id="firebase-measurement-id" placeholder="G-XXXX" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+        <button class="btn-secundario" type="button" id="cancel-firebase-config">Cancelar</button>
+        <button class="btn-primario" type="button" id="save-firebase-config">Guardar y recargar</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     let userGoogleTTSKey = null;
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
+    const FIREBASE_CONFIG_STORAGE_KEY = 'listen_ai_firebase_config_v1';
 
-    const FIREBASE_API_KEY = "AIzaSyDigVtE9WexPsg0gOvjcsuYVO_FX-r__7o";
-
-    const firebaseConfig = {
-      apiKey: FIREBASE_API_KEY,
+    const LEGACY_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyDigVtE9WexPsg0gOvjcsuYVO_FX-r__7o",
       authDomain: "interfaces-4bc20.firebaseapp.com",
       projectId: "interfaces-4bc20",
       storageBucket: "interfaces-4bc20.firebasestorage.app",
@@ -1504,15 +1529,116 @@
       measurementId: "G-2XGZ3JEY94"
     };
 
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-      console.log('🔥 Firebase inicializado', {
-        apiKeyPresent: !!firebaseConfig.apiKey,
-        authDomain: firebaseConfig.authDomain,
-        projectId: firebaseConfig.projectId,
-        storageBucket: firebaseConfig.storageBucket
+    const DEFAULT_FIREBASE_CONFIG = {
+      apiKey: '',
+      authDomain: '',
+      projectId: '',
+      storageBucket: '',
+      messagingSenderId: '',
+      appId: '',
+      measurementId: ''
+    };
+
+    let firebaseAppInitialized = false;
+    let firebaseConfigInUse = null;
+    let lastFirebaseInitError = null;
+
+    function sanitizeFirebaseConfig(rawConfig = {}) {
+      const clean = { ...DEFAULT_FIREBASE_CONFIG, ...rawConfig };
+      Object.keys(clean).forEach((key) => {
+        if (typeof clean[key] === 'string') {
+          clean[key] = clean[key].trim();
+        }
       });
+      return clean;
     }
+
+    function validateFirebaseConfig(config) {
+      if (!config) return false;
+      const required = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+      return required.every((field) => typeof config[field] === 'string' && config[field].trim().length > 0);
+    }
+
+    function loadStoredFirebaseConfig() {
+      try {
+        const raw = localStorage.getItem(FIREBASE_CONFIG_STORAGE_KEY);
+        if (!raw) return null;
+        return sanitizeFirebaseConfig(JSON.parse(raw));
+      } catch (error) {
+        console.error('❌ Error cargando config de Firebase guardada', error);
+        return null;
+      }
+    }
+
+    function saveStoredFirebaseConfig(config) {
+      try {
+        localStorage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify(sanitizeFirebaseConfig(config)));
+      } catch (error) {
+        console.error('❌ No se pudo guardar la configuración de Firebase', error);
+      }
+    }
+
+    function getActiveFirebaseConfig() {
+      const stored = loadStoredFirebaseConfig();
+      if (validateFirebaseConfig(stored)) return stored;
+      const allowLegacy = localStorage.getItem('allowLegacyFirebaseConfig') === 'true';
+      if (allowLegacy && validateFirebaseConfig(LEGACY_FIREBASE_CONFIG)) {
+        console.warn('⚠️ Usando configuración legacy de Firebase. Se recomienda cambiarla cuanto antes.');
+        return LEGACY_FIREBASE_CONFIG;
+      }
+      return null;
+    }
+
+    function ensureFirebaseReady(context = 'operación') {
+      if (firebaseAppInitialized) return true;
+      console.error(`❌ Firebase no está configurado. Acción bloqueada: ${context}`);
+      mostrarFirebaseConfigModal(`Configura tu proyecto de Firebase para continuar con ${context}.`);
+      throw new Error('Firebase no inicializado');
+    }
+
+    function handleFirebaseOperationError(context, error) {
+      console.error(`❌ Firebase error en ${context}`, error);
+      const message = error?.message || 'Error desconocido en Firebase';
+      if (typeof message === 'string' && message.toLowerCase().includes('permission')) {
+        mostrarPopupError('Permiso denegado en Firebase. Revisa las reglas y la configuración del proyecto.');
+        return;
+      }
+      mostrarPopupError('No pudimos completar la acción. Verifica tu conexión o configuración de Firebase.');
+    }
+
+    function initializeFirebaseApp() {
+      const config = getActiveFirebaseConfig();
+      firebaseConfigInUse = config;
+
+      if (!validateFirebaseConfig(config)) {
+        firebaseAppInitialized = false;
+        updateFirebaseStatusLabel('Sin configurar');
+        lastFirebaseInitError = new Error('Faltan credenciales de Firebase');
+        return;
+      }
+
+      if (!firebase.apps.length) {
+        try {
+          firebase.initializeApp(config);
+          firebaseAppInitialized = true;
+          lastFirebaseInitError = null;
+          console.log('🔥 Firebase inicializado', {
+            apiKeyPresent: !!config.apiKey,
+            authDomain: config.authDomain,
+            projectId: config.projectId,
+            storageBucket: config.storageBucket
+          });
+          updateFirebaseStatusLabel(config.projectId || 'Listo');
+        } catch (error) {
+          firebaseAppInitialized = false;
+          lastFirebaseInitError = error;
+          console.error('❌ No se pudo inicializar Firebase', error);
+          updateFirebaseStatusLabel('Error');
+        }
+      }
+    }
+
+    initializeFirebaseApp();
 
     const errorMessages = {
       'auth/email-already-in-use': 'Este email ya tiene cuenta. ¿Deseas iniciar sesión?',
@@ -2736,6 +2862,11 @@
     }
 
     async function signupUser(email, password) {
+      try {
+        ensureFirebaseReady('crear cuenta');
+      } catch (error) {
+        return { success: false, message: 'Configura Firebase antes de crear una cuenta.', code: 'firebase/not-configured' };
+      }
       const normalizedEmail = normalizeEmail(email);
       const plainPassword = password ?? '';
       authLog('🆕 Intentando registro', { normalizedEmail, passwordLength: plainPassword.length, maskedPassword: maskPassword(plainPassword) });
@@ -2754,12 +2885,17 @@
         await ensureUserSettings(user.uid, normalizedEmail, true);
         return { success: true, message: 'Cuenta creada y sesión iniciada. Revisa tu email para verificar.', user };
       } catch (error) {
-        console.error('Error al crear cuenta:', error);
+        handleFirebaseOperationError('crear cuenta', error);
         return { success: false, message: errorMessages[error.code] || error.message, code: error.code };
       }
     }
 
     async function loginUser(email, password, remember) {
+      try {
+        ensureFirebaseReady('iniciar sesión');
+      } catch (error) {
+        return { success: false, message: 'Configura Firebase antes de iniciar sesión.', code: 'firebase/not-configured' };
+      }
       const normalizedEmail = normalizeEmail(email);
       const plainPassword = password ?? '';
       authLog('➡️ Intento de login', {
@@ -2826,6 +2962,7 @@
 
     async function resetPassword(email) {
       try {
+        ensureFirebaseReady('recuperar contraseña');
         authLog('🔁 Solicitud de reset de contraseña', { email });
         await firebase.auth().sendPasswordResetEmail(email);
         authError.style.display = 'none';
@@ -2845,7 +2982,13 @@
 
     async function logoutUser() {
       authLog('🚪 Cerrando sesión manualmente');
-      await firebase.auth().signOut();
+      if (firebaseAppInitialized) {
+        try {
+          await firebase.auth().signOut();
+        } catch (error) {
+          handleFirebaseOperationError('cerrar sesión', error);
+        }
+      }
       await clearLocalDocumentos();
       documentos = [];
       userGoogleTTSKey = null;
@@ -2858,6 +3001,7 @@
       const flagKey = 'testAccountCreated';
       if (localStorage.getItem(flagKey) === 'true') return;
       try {
+        ensureFirebaseReady('crear cuenta de prueba');
         if (firebase.auth().currentUser) return;
         const methods = await firebase.auth().fetchSignInMethodsForEmail('danieltrigre7@gmail.com');
         if (methods.length > 0) {
@@ -2877,6 +3021,7 @@
     }
 
     async function saveUserAPIKey(userId, googleTTSKey) {
+      ensureFirebaseReady('guardar API Key');
       const payload = {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
@@ -2885,15 +3030,16 @@
       } else {
         payload.googleTTSKey = null;
       }
-
       try {
         await firebase.firestore().collection('userSettings').doc(userId).set(payload, { merge: true });
       } catch (error) {
-        console.warn('No se pudo guardar la API Key en Firestore', error);
+        handleFirebaseOperationError('guardar API Key', error);
+        throw error;
       }
     }
 
     async function getUserAPIKey(userId) {
+      ensureFirebaseReady('leer API Key');
       try {
         const docRef = await firebase.firestore().collection('userSettings').doc(userId).get();
         authLog('🔎 Consultando API key guardada', { userId, exists: docRef.exists });
@@ -2901,15 +3047,17 @@
           const data = docRef.data();
           return data?.googleTTSKey || null;
         }
+        return null;
       } catch (error) {
-        console.warn('No se pudo obtener la API Key desde Firestore', error);
+        handleFirebaseOperationError('leer API Key', error);
+        return null;
       }
-      return null;
     }
 
     async function ensureUserSettings(userId, email, fromSignup = false) {
+      ensureFirebaseReady('sincronizar ajustes de usuario');
+      const settingsRef = firebase.firestore().collection('userSettings').doc(userId);
       try {
-        const settingsRef = firebase.firestore().collection('userSettings').doc(userId);
         const doc = await settingsRef.get();
         if (doc.exists) {
           authLog('⚙️ userSettings ya existe', { userId, fromSignup });
@@ -2925,12 +3073,13 @@
         await settingsRef.set(payload);
         return payload;
       } catch (error) {
-        console.warn('No se pudieron asegurar userSettings, continuando en local', error);
-        return null;
+        handleFirebaseOperationError('guardar ajustes de usuario', error);
+        throw error;
       }
     }
 
     async function saveUserDocument(userId, docData) {
+      ensureFirebaseReady('guardar documento');
       try {
         const docRef = await firebase.firestore().collection('documents').add({
           userId,
@@ -2949,12 +3098,13 @@
         });
         return docRef.id;
       } catch (error) {
-        console.warn('No se pudo guardar documento en Firestore', error);
-        return null;
+        handleFirebaseOperationError('guardar documento', error);
+        throw error;
       }
     }
 
     async function loadUserDocuments(userId) {
+      ensureFirebaseReady('cargar documentos');
       try {
         authLog('📂 Descargando documentos de usuario', { userId });
         const snapshot = await firebase.firestore()
@@ -2986,32 +3136,35 @@
         authLog('📚 Documentos cargados', { total: documents.length });
         return documents;
       } catch (error) {
-        console.warn('No se pudieron cargar documentos desde Firestore', error);
+        handleFirebaseOperationError('cargar documentos', error);
         return [];
       }
     }
 
     async function updateFirestoreDocument(id, updates) {
+      ensureFirebaseReady('actualizar documento');
+      const payload = { ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
       try {
-        const payload = { ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
         return await firebase.firestore().collection('documents').doc(id).update(payload);
       } catch (error) {
-        console.warn('No se pudo actualizar documento en Firestore', error);
-        return null;
+        handleFirebaseOperationError('actualizar documento', error);
+        throw error;
       }
     }
 
     async function deleteFirestoreDocument(id) {
+      ensureFirebaseReady('eliminar documento');
       try {
         return await firebase.firestore().collection('documents').doc(id).delete();
       } catch (error) {
-        console.warn('No se pudo eliminar documento en Firestore', error);
-        return null;
+        handleFirebaseOperationError('eliminar documento', error);
+        throw error;
       }
     }
 
     async function syncUserDocuments(userId) {
       try {
+        ensureFirebaseReady('sincronizar biblioteca');
         toggleLoader(true, 'Cargando tu biblioteca', 'Sincronizando documentos de tu cuenta...');
         const docs = await loadUserDocuments(userId);
         await clearLocalDocumentos();
@@ -3043,29 +3196,18 @@
         tipo: doc.tipo || 'texto'
       };
 
-      let firestoreId = null;
-
-      if (currentUser?.emailVerified) {
-        try {
-          firestoreId = await saveUserDocument(currentUser.uid, docData);
-        } catch (error) {
-          console.warn('No se pudo guardar en Firestore, usando almacenamiento local', error);
-          mostrarPopupError('Guardado en la nube no disponible. Guardando en este dispositivo.');
-        }
-      }
-
-      const localDoc = { ...doc, id: firestoreId || doc.id || generateId(), userId: currentUser?.uid || doc.userId || 'local' };
-      await addDocumento(localDoc);
-      documentos = await getDocumentos(currentUser?.uid);
-      renderDocumentos();
-
-      if (firestoreId) {
+      try {
+        const firestoreId = await saveUserDocument(currentUser.uid, docData);
+        const localDoc = { ...doc, id: firestoreId, userId: currentUser.uid };
+        await addDocumento(localDoc);
+        documentos = await getDocumentos(currentUser.uid);
+        renderDocumentos();
         mostrarPopupExito('Documento guardado en tu cuenta');
-      } else {
-        mostrarPopupExito('Documento guardado localmente');
+        return firestoreId;
+      } catch (error) {
+        handleFirebaseOperationError('guardar documento de usuario', error);
+        return null;
       }
-
-      return localDoc.id;
     }
 
     function setupAuthListeners() {
@@ -3175,6 +3317,10 @@
     }
 
     function initializeAuthWatcher() {
+      if (!firebaseAppInitialized) {
+        console.warn('ℹ️ Firebase no configurado. El estado de autenticación no se observará hasta configurarlo.');
+        return;
+      }
       firebase.auth().onAuthStateChanged(async (user) => {
         authStateLog('onAuthStateChanged', {
           userPresent: !!user,
@@ -3191,10 +3337,14 @@
 
         if (user) {
           showMainApp();
-          await ensureUserSettings(user.uid, user.email || currentUser?.email, false);
-          await syncUserDocuments(user.uid);
-          await loadUserSettings(user.uid);
-          await inicializarAPIKey();
+          try {
+            await ensureUserSettings(user.uid, user.email || currentUser?.email, false);
+            await syncUserDocuments(user.uid);
+            await loadUserSettings(user.uid);
+            await inicializarAPIKey();
+          } catch (error) {
+            handleFirebaseOperationError('cargar datos de usuario', error);
+          }
           mostrarPopupExito('Sesión iniciada correctamente');
           if (!user.emailVerified) {
             mostrarPopupError('Tu email aún no está verificado. Revisa tu bandeja para mayor seguridad.');
@@ -3368,6 +3518,74 @@
       const modal = document.getElementById('api-key-setup-modal');
       if (modal) modal.style.display = 'none';
       toggleOverlay(false);
+    }
+
+    function updateFirebaseStatusLabel(value) {
+      const label = document.getElementById('firebase-status-label');
+      if (label) {
+        label.textContent = value || 'Sin configurar';
+        label.style.color = firebaseAppInitialized ? '#1A1A1A' : '#FF3B30';
+      }
+    }
+
+    function prefillFirebaseConfigForm(config) {
+      const safeConfig = sanitizeFirebaseConfig(config || firebaseConfigInUse || loadStoredFirebaseConfig());
+      const fields = {
+        'firebase-api-key': safeConfig.apiKey || '',
+        'firebase-auth-domain': safeConfig.authDomain || '',
+        'firebase-project-id': safeConfig.projectId || '',
+        'firebase-storage-bucket': safeConfig.storageBucket || '',
+        'firebase-messaging-sender': safeConfig.messagingSenderId || '',
+        'firebase-app-id': safeConfig.appId || '',
+        'firebase-measurement-id': safeConfig.measurementId || ''
+      };
+
+      Object.entries(fields).forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = value;
+      });
+    }
+
+    function mostrarFirebaseConfigModal(message) {
+      const modal = document.getElementById('firebase-config-modal');
+      const hint = document.getElementById('firebase-config-hint');
+      if (!modal) return;
+      if (hint && message) {
+        hint.textContent = message;
+      } else if (hint) {
+        hint.textContent = 'Configura un proyecto propio para evitar errores de permisos y mantener tus datos seguros.';
+      }
+      prefillFirebaseConfigForm();
+      modal.style.display = 'flex';
+      toggleOverlay(true);
+    }
+
+    function cerrarFirebaseConfigModal() {
+      const modal = document.getElementById('firebase-config-modal');
+      if (modal) modal.style.display = 'none';
+      toggleOverlay(false);
+    }
+
+    function handleFirebaseConfigSave() {
+      const config = sanitizeFirebaseConfig({
+        apiKey: document.getElementById('firebase-api-key')?.value,
+        authDomain: document.getElementById('firebase-auth-domain')?.value,
+        projectId: document.getElementById('firebase-project-id')?.value,
+        storageBucket: document.getElementById('firebase-storage-bucket')?.value,
+        messagingSenderId: document.getElementById('firebase-messaging-sender')?.value,
+        appId: document.getElementById('firebase-app-id')?.value,
+        measurementId: document.getElementById('firebase-measurement-id')?.value
+      });
+
+      if (!validateFirebaseConfig(config)) {
+        mostrarPopupError('Completa todos los campos obligatorios de Firebase.');
+        return;
+      }
+
+      saveStoredFirebaseConfig(config);
+      updateFirebaseStatusLabel(config.projectId || 'Listo');
+      mostrarPopupExito('Configuración guardada. Recargando para aplicar cambios...');
+      setTimeout(() => window.location.reload(), 650);
     }
 
     async function saveAPIKey() {
@@ -4805,17 +5023,22 @@
       });
     }));
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      // ✅ FORZAR PÁGINA INICIAL
-      switchPage('home');
-      console.log('✅ Página inicial: home');
-      showLoginScreen();
+      window.addEventListener('DOMContentLoaded', async () => {
+        // ✅ FORZAR PÁGINA INICIAL
+        switchPage('home');
+        console.log('✅ Página inicial: home');
+        showLoginScreen();
 
-      bindCardEvents();
-      setupAuthListeners();
-      initializeAuthWatcher();
-      createTestAccount();
-      await inicializarAPIKey();
+        bindCardEvents();
+        setupAuthListeners();
+        updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (firebaseAppInitialized ? 'Listo' : 'Sin configurar'));
+        if (firebaseAppInitialized) {
+          initializeAuthWatcher();
+          createTestAccount();
+        } else {
+          mostrarFirebaseConfigModal('Configura tu proyecto de Firebase para continuar.');
+        }
+        await inicializarAPIKey();
 
       // ✅ BOTÓN DE API KEY EN HEADER
       const btnApiStatus = document.getElementById('btn-api-status');
@@ -4834,13 +5057,26 @@
         cancelApiKeyBtn.addEventListener('click', cerrarApiKeySetupModal);
       }
 
-      document.querySelectorAll('[data-action="config-api"]').forEach((el) => {
-        el.addEventListener('click', () => {
-          const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser.uid}` : 'skipAPIKey_guest';
-          localStorage.setItem(skipKey, 'false');
-          mostrarApiKeySetupModal();
+        document.querySelectorAll('[data-action="config-api"]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser.uid}` : 'skipAPIKey_guest';
+            localStorage.setItem(skipKey, 'false');
+            mostrarApiKeySetupModal();
+          });
         });
-      });
+
+        document.querySelectorAll('[data-action="config-firebase"]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const message = lastFirebaseInitError
+              ? `Firebase no está listo (${lastFirebaseInitError.message}). Actualiza las credenciales para continuar.`
+              : 'Configura tu proyecto de Firebase para evitar errores de permisos.';
+            mostrarFirebaseConfigModal(message);
+          });
+        });
+
+        document.getElementById('save-firebase-config')?.addEventListener('click', handleFirebaseConfigSave);
+        document.getElementById('cancel-firebase-config')?.addEventListener('click', cerrarFirebaseConfigModal);
+        document.querySelector('[data-close="firebase-config"]')?.addEventListener('click', cerrarFirebaseConfigModal);
 
       loadVoices(() => renderVoices());
       setSpeed(velocidadActual);
