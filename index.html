@@ -3641,25 +3641,13 @@
     };
 
     function getAvailableVoices() {
-      if (userGoogleTTSKey) {
-        return getVoicesForLanguage(currentLanguage, Object.values(VOICE_CONFIG));
+      const naturalVoices = getVoicesForLanguage(currentLanguage, Object.values(VOICE_CONFIG));
+
+      if (!userGoogleTTSKey) {
+        return naturalVoices;
       }
 
-      const browserVoices = window.speechSynthesis?.getVoices?.() || [];
-
-      if (!browserVoices.length) {
-        // No mostramos voces de Google si la API key no está configurada para evitar seleccionar una opción inválida.
-        return [];
-      }
-
-      return browserVoices.map((voz) => ({
-        nombre: voz.name,
-        desc: `Voz del navegador (${voz.lang || 'sin idioma'})`,
-        avatar: 'https://placehold.co/64x64?text=🎤',
-        languageCode: voz.lang || 'es-ES',
-        gender: voz.gender || 'NEUTRAL',
-        browserVoice: true
-      }));
+      return naturalVoices;
     }
 
     const getApiStatusLabel = () => document.getElementById('api-status-label');
@@ -4071,10 +4059,16 @@
       voiceList.innerHTML = '';
       const availableVoices = getAvailableVoices();
 
+      if (!userGoogleTTSKey && availableVoices.length) {
+        const warning = document.createElement('div');
+        warning.className = 'guest-warning';
+        warning.innerHTML = '⚠️ Necesitas configurar tu API Key de Google Cloud TTS para usar estas voces naturales.';
+        warning.style.marginBottom = '12px';
+        voiceList.appendChild(warning);
+      }
+
       if (!availableVoices.length) {
-        voiceList.innerHTML = '<p style="padding:12px; color:#666;">Carga las voces del navegador para seleccionarlas o configura tu API de Google Cloud.</p>';
-        setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser', vozSeleccionada);
-        updateVoiceLabels(vozSeleccionada);
+        voiceList.innerHTML = '<p style="padding:12px; color:#666;">No hay voces disponibles.</p>';
         return;
       }
 
