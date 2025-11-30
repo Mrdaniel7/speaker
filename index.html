@@ -2160,6 +2160,36 @@
       return chunks;
     }
 
+    async function generateGoogleTTS(text, voiceName, apiKey, speakingRate = 1.0) {
+      const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`;
+      const voiceId = voiceName || 'es-ES-Neural2-A';
+      const languageCode = voiceId.startsWith('en-') ? 'en-US' : 'es-ES';
+      const payload = {
+        input: { text },
+        voice: { languageCode, name: voiceId },
+        audioConfig: {
+          audioEncoding: 'MP3',
+          speakingRate: Math.max(0.25, Math.min(4.0, speakingRate)),
+        }
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.audioContent) throw new Error('Google TTS no devolvió audio');
+
+      return base64ToBlob(data.audioContent, 'audio/mp3');
+    }
+
     async function speakNatural(texto, vozNombre, velocidad = 1.0, options = {}) {
       const { silenciarErrores = false } = options;
       const vozConfig = VOICE_CONFIG[vozNombre] || getAvailableVoices().find((v) => v.nombre === vozNombre);
@@ -2196,58 +2226,27 @@
         for (const parte of chunks) {
           console.log('📝 Enviando a Google TTS:', parte.substring(0, 50) + '...');
 
-          const response = await fetch(
-            `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                input: { text: parte },
-                voice: {
-                  languageCode: vozConfig.languageCode,
-                  name: vozConfig.googleVoice,
-                  ssmlGender: vozConfig.gender
-                },
-                audioConfig: {
-                  audioEncoding: 'MP3',
-                  speakingRate: Math.max(0.25, Math.min(4.0, velocidad)),
-                  pitch: 0.0,
-                  volumeGainDb: 0.0,
-                  effectsProfileId: ['headphone-class-device']
-                }
-              })
-            }
-          );
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('❌ Google TTS Error:', response.status, errorData);
+          try {
+            const blob = await generateGoogleTTS(parte, vozConfig.googleVoice, apiKey, velocidad);
+            audioBuffers.push(blob);
+          } catch (error) {
+            console.error('❌ Google TTS Error:', error);
 
             if (!silenciarErrores) {
-              if (response.status === 400) {
-                mostrarPopupError('Error 400: Texto inválido o API Key incorrecta.');
-              } else if (response.status === 403) {
+              const message = error?.message || '';
+              if (message.includes('403')) {
                 await setStoredApiKey(null);
                 actualizarEstadoAPIKeyUI(false);
                 mostrarPopupError('API Key sin permisos. Reconfigura.');
-              } else if (response.status === 429) {
+              } else if (message.includes('429')) {
                 mostrarPopupError('Límite de cuota excedido.');
+              } else {
+                mostrarPopupError('Error al generar audio con Google TTS.');
               }
             }
 
             return usarVozNavegador(texto, vozConfig, velocidad);
           }
-
-          const data = await response.json();
-
-          if (!data.audioContent) {
-            throw new Error('No se recibió audio de Google TTS');
-          }
-
-          audioBuffers.push(base64ToBlob(data.audioContent, 'audio/mp3'));
         }
 
         const audioBlob = new Blob(audioBuffers, { type: 'audio/mp3' });
@@ -3622,8 +3621,10 @@
       }
 
       const browserVoices = window.speechSynthesis?.getVoices?.() || [];
+
       if (!browserVoices.length) {
-        return VOICES_DATA;
+        // No mostramos voces de Google si la API key no está configurada para evitar seleccionar una opción inválida.
+        return [];
       }
 
       return browserVoices.map((voz) => ({
@@ -4044,6 +4045,13 @@
     function renderVoices() {
       voiceList.innerHTML = '';
       const availableVoices = getAvailableVoices();
+
+      if (!availableVoices.length) {
+        voiceList.innerHTML = '<p style="padding:12px; color:#666;">Carga las voces del navegador para seleccionarlas o configura tu API de Google Cloud.</p>';
+        setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser', vozSeleccionada);
+        updateVoiceLabels(vozSeleccionada);
+        return;
+      }
 
       if (!availableVoices.find((v) => v.nombre === vozSeleccionada)) {
         vozSeleccionada = availableVoices[0]?.nombre || vozSeleccionada;
@@ -4835,25 +4843,7 @@
           throw new Error('API key no configurada.');
         }
         const vozConfig = VOICE_CONFIG[doc.vozSeleccionada || 'Sasha'] || VOICE_CONFIG['Sasha'];
-        const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${keyToUse}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input: { text: doc.texto },
-            voice: { languageCode: vozConfig.languageCode, name: vozConfig.googleVoice, ssmlGender: vozConfig.gender },
-            audioConfig: { audioEncoding: 'MP3', speakingRate: doc.velocidad || 1.0 },
-          }),
-        });
-
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          throw new Error(errorBody?.error?.message || 'No se pudo generar el audio');
-        }
-
-        const data = await response.json();
-        if (!data.audioContent) throw new Error('Respuesta sin audio');
-
-        const blob = base64ToBlob(data.audioContent, 'audio/mp3');
+        const blob = await generateGoogleTTS(doc.texto, vozConfig.googleVoice, keyToUse, doc.velocidad || 1.0);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = `${doc.titulo}.mp3`; a.click();
