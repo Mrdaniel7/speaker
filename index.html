@@ -201,6 +201,10 @@
     @keyframes ripple {
       to { transform: scale(4); opacity: 0; }
     }
+    @keyframes blinkWarning {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
     .icon-card {
       width: 48px;
       height: 48px;
@@ -220,6 +224,7 @@
     .lib-icons { display: flex; gap: 10px; align-items: center; }
     .progress-circle { width: 42px; height: 42px; border-radius: 50%; border: 3px solid var(--azul-icono); display: grid; place-items: center; background: #fff; }
     .circle-text { color: var(--azul-icono); font-weight: 700; }
+    .circle-text.blink-danger { color: #FF3B30; animation: blinkWarning 1s infinite; }
     .star-counter { background: #FFF3E0; padding: 6px 10px; border-radius: 12px; color: var(--amarillo-principal); font-weight: 700; border: 1px solid #FFE0B2; }
 
     .tabs { display: flex; gap: 8px; margin: 16px 0; overflow-x: auto; }
@@ -1490,14 +1495,14 @@
 
   <div id="api-key-setup-modal" class="modal-overlay" style="display:none; align-items: center; justify-content: center;">
     <div class="modal-api-key" style="background:#fff; padding:24px; border-radius:16px; max-width:460px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.15); position: relative;">
-      <button class="btn-cerrar" data-close="api-key-setup" style="position:absolute; right:12px; top:12px;">×</button>
+      <button class="btn-cerrar" id="close-api-key-setup" style="position:absolute; right:12px; top:12px;">×</button>
       <h3 style="margin-top:0; margin-bottom:12px;">Configuración de API Key</h3>
       <p style="margin-top:0; color:#555;">Para usar las voces de Google Text-to-Speech, necesitas configurar tu propia API key.</p>
       <label for="google-tts-api-key-input" style="display:block; font-weight:600; margin-top:12px;">API Key de Google TTS:</label>
       <input type="text" id="google-tts-api-key-input" placeholder="AIzaSy..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;">
       <a href="https://cloud.google.com/text-to-speech/docs/before-you-begin" target="_blank" style="display:inline-block; margin:10px 0; color:#1a73e8;">¿Cómo obtener una API key?</a>
       <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-        <button class="btn-secundario" type="button" id="cancel-api-key-setup">Cancelar</button>
+        <button class="btn-secundario" type="button" id="cancel-api-key-setup">Omitir (usar voces del sistema)</button>
         <button class="btn-primario" type="button" onclick="saveAPIKey()">Guardar</button>
       </div>
     </div>
@@ -2260,79 +2265,106 @@
 
     async function speakNatural(texto, vozNombre, velocidad = 1.0, options = {}) {
       const { silenciarErrores = false } = options;
-      const vozConfig = VOICE_CONFIG[vozNombre] || getAvailableVoices().find((v) => v.nombre === vozNombre);
+      
+      // VALIDACIÓN ESTRICTA DE API KEY
       let apiKey = userGoogleTTSKey;
-
       if (!apiKey && currentUser?.uid && isFirebaseAvailable()) {
         apiKey = await getUserAPIKey(currentUser.uid);
         if (apiKey) {
           await setStoredApiKey(apiKey);
         }
       }
-
+      
+      // SI NO HAY API KEY, MOSTRAR ERROR Y DETENER
       if (!apiKey) {
-        console.warn('⚠️ No API Key - usando voces del navegador');
-        return usarVozNavegador(texto, vozConfig, velocidad);
+        if (!silenciarErrores) {
+          mostrarPopupError('🔑 Configura tu API Key de Google Cloud TTS para usar voces naturales');
+          setTimeout(() => mostrarApiKeySetupModal(), 500);
+        }
+        console.error('❌ No se puede reproducir: falta API Key de Google Cloud TTS');
+        return null;
       }
-
+      
+      const vozConfig = VOICE_CONFIG[vozNombre] || getAvailableVoices().find((v) => v.nombre === vozNombre);
+      
       if (!vozConfig) {
         console.error('❌ Voz no configurada:', vozNombre);
-        return usarVozNavegador(texto, null, velocidad);
+        if (!silenciarErrores) {
+          mostrarPopupError(`❌ Voz "${vozNombre}" no disponible`);
+        }
+        return null;
       }
       
       try {
         const textoLimpio = (texto ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
         const chunks = dividirEnChunks(textoLimpio);
-
+        
         if (!chunks.length) {
           if (!silenciarErrores) mostrarPopupError('No hay texto para reproducir.');
           return null;
         }
-
+        
         const audioBuffers = [];
-
-        console.log('Generating audio with Google Cloud TTS:', vozConfig.googleVoice, 'idioma:', vozConfig.languageCode);
-
+        console.log('🎙️ Generando audio con Google Cloud TTS Neural2:', vozConfig.googleVoice);
+        
         for (const parte of chunks) {
-          console.log('📝 Enviando a Google TTS:', parte.substring(0, 50) + '...');
-
+          console.log('📝 Procesando chunk:', parte.substring(0, 50) + '...');
           try {
             const blob = await generateGoogleTTS(parte, vozConfig.googleVoice, apiKey, velocidad);
             audioBuffers.push(blob);
           } catch (error) {
             console.error('❌ Google TTS Error:', error);
+            const message = error?.message || 'Error desconocido';
+            let popupMessage = `❌ Error con Google Cloud TTS: ${message}. Verifica tu API Key.`;
 
-            if (!silenciarErrores) {
-              const message = error?.message || '';
-              if (message.includes('403')) {
-                await setStoredApiKey(null);
-                actualizarEstadoAPIKeyUI(false);
-                mostrarPopupError('API Key sin permisos. Reconfigura.');
-              } else if (message.includes('429')) {
-                mostrarPopupError('Límite de cuota excedido.');
-              } else {
-                mostrarPopupError('Error al generar audio con Google TTS.');
+            // ERRORES ESPECÍFICOS CON MENSAJES CLAROS
+            if (message.includes('403') || message.includes('permission')) {
+              await setStoredApiKey(null);
+              actualizarEstadoAPIKeyUI(false);
+              if (!silenciarErrores) {
+                popupMessage = '❌ API Key sin permisos. Verifica que esté habilitada la API de Text-to-Speech en Google Cloud.';
+                mostrarPopupError(popupMessage);
+                setTimeout(() => mostrarApiKeySetupModal(), 1000);
+              }
+            } else if (message.includes('429') || message.includes('quota')) {
+              if (!silenciarErrores) {
+                popupMessage = '⚠️ Límite de cuota de Google Cloud TTS excedido. Intenta más tarde.';
+                mostrarPopupError(popupMessage);
+              }
+            } else if (message.includes('401') || message.includes('invalid')) {
+              await setStoredApiKey(null);
+              actualizarEstadoAPIKeyUI(false);
+              if (!silenciarErrores) {
+                popupMessage = '❌ API Key inválida. Verifica tu clave de Google Cloud.';
+                mostrarPopupError(popupMessage);
+                setTimeout(() => mostrarApiKeySetupModal(), 1000);
+              }
+            } else {
+              if (!silenciarErrores) {
+                mostrarPopupError(popupMessage);
               }
             }
-
-            return usarVozNavegador(texto, vozConfig, velocidad);
+            
+            // NO HACER FALLBACK - Retornar null
+            return null;
           }
         }
-
+        
         const audioBlob = new Blob(audioBuffers, { type: 'audio/mp3' });
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-
         audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
-
-        console.log('✅ Audio generado con Google TTS Neural2');
+        
+        console.log('✅ Audio generado exitosamente con Google Cloud TTS Neural2');
         setVoiceSystem('google', vozConfig?.nombre || vozNombre);
         return audio;
-
+        
       } catch (error) {
         console.error('❌ Error en síntesis de voz:', error);
-        if (!silenciarErrores) mostrarPopupError(`Error al generar audio: ${error.message}`);
-        return usarVozNavegador(texto, vozConfig, velocidad);
+        if (!silenciarErrores) {
+          mostrarPopupError(`❌ Error inesperado: ${error.message}`);
+        }
+        return null;
       }
     }
 
@@ -3678,7 +3710,9 @@
 
     function updateVoiceLabels(nombre = vozSeleccionada) {
       const selectedName = nombre || vozSeleccionada;
-      const systemLabel = voiceSystem === 'google' && userGoogleTTSKey ? 'Google Cloud TTS' : 'Voces del navegador';
+      const systemLabel = voiceSystem === 'google' && userGoogleTTSKey
+        ? '🎙️ Google Cloud TTS (Natural)'
+        : '🔊 Voces del sistema (Sintéticas)';
       const voiceBtnLabel = voiceBtn?.querySelector('small');
       if (voiceBtnLabel) voiceBtnLabel.textContent = `${selectedName} · ${systemLabel}`;
       if (vozActualLabel) vozActualLabel.textContent = `${selectedName} · ${systemLabel}`;
@@ -3690,6 +3724,10 @@
     }
 
     const getStoredApiKey = () => userGoogleTTSKey;
+    const hasAPIKeySkipPreference = () => {
+      const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser?.uid}` : GUEST_SKIP_API_KEY_KEY;
+      return localStorage.getItem(skipKey) === 'true';
+    };
     const setStoredApiKey = async (key) => {
       if (!isGuestMode && currentUser?.uid && isFirebaseAvailable()) {
         await saveUserAPIKey(currentUser.uid, key);
@@ -3746,18 +3784,20 @@
           btnApiStatus.style.background = '#E8F9EE';
           icon.textContent = '✓';
           icon.style.color = '#34C759';
+          icon.classList.remove('blink-danger');
           btnApiStatus.title = 'API Key configurada ✓';
         } else {
           btnApiStatus.style.borderColor = '#FF3B30';
           btnApiStatus.style.background = '#FFEBEA';
           icon.textContent = '⚠';
           icon.style.color = '#FF3B30';
+          icon.classList.add('blink-danger');
           btnApiStatus.title = 'Configurar API Key';
         }
       }
 
       if (apiLabel) {
-        apiLabel.textContent = isValidKey && apiKey ? 'Configurada' : 'Sin configurar';
+        apiLabel.textContent = isValidKey && apiKey ? 'Configurada' : '⚠️ API Key requerida';
         apiLabel.style.color = isValidKey && apiKey ? '#1A1A1A' : '#FF3B30';
       }
 
@@ -3786,10 +3826,27 @@
       toggleOverlay(true);
     }
 
-    function cerrarApiKeySetupModal() {
+    function cerrarApiKeySetupModal(force = false) {
       const modal = document.getElementById('api-key-setup-modal');
-      if (modal) modal.style.display = 'none';
+      if (!modal) return;
+      if (!force && !getStoredApiKey() && !hasAPIKeySkipPreference()) {
+        mostrarPopupError('⚠️ Configura una API Key o selecciona "Omitir" para usar voces sintéticas');
+        toggleOverlay(true);
+        modal.style.display = 'flex';
+        return;
+      }
+      modal.style.display = 'none';
       toggleOverlay(false);
+    }
+
+    function marcarOmitirAPIKey() {
+      const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser?.uid}` : GUEST_SKIP_API_KEY_KEY;
+      localStorage.setItem(skipKey, 'true');
+      userGoogleTTSKey = null;
+      setVoiceSystem('browser');
+      actualizarEstadoAPIKeyUI(false);
+      cerrarApiKeySetupModal(true);
+      mostrarPopupError('Usarás voces del sistema hasta que configures tu API Key de Google Cloud TTS.');
     }
 
     function updateFirebaseStatusLabel(value) {
@@ -4048,17 +4105,6 @@
         return true;
       }
 
-      if (!currentUser?.uid) {
-        actualizarEstadoAPIKeyUI(false);
-        return false;
-      }
-
-      if (skipAPIKey && !candidateKey) {
-        logDebug('API Key omitida por preferencia del usuario');
-        actualizarEstadoAPIKeyUI(false);
-        return false;
-      }
-
       if (candidateKey) {
         const { valid, message } = await validarAPIKey(candidateKey);
         if (valid) {
@@ -4074,8 +4120,10 @@
       }
 
       actualizarEstadoAPIKeyUI(false);
+      setVoiceSystem('browser');
       if (!skipAPIKey) {
         mostrarApiKeySetupModal();
+        toggleOverlay(true);
       }
       return false;
     }
@@ -4106,8 +4154,16 @@
     }
 
     function closeModals() {
+      const apiModal = document.getElementById('api-key-setup-modal');
+      const apiModalVisible = apiModal && apiModal.style.display !== 'none' && apiModal.style.display !== '';
+      if (apiModalVisible && !getStoredApiKey() && !hasAPIKeySkipPreference()) {
+        mostrarPopupError('⚠️ Configura tu API Key o selecciona "Omitir" para cerrar este diálogo.');
+        toggleOverlay(true);
+        apiModal.style.display = 'flex';
+        return;
+      }
       toggleOverlay(false);
-      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm, fileSourceModal, editModal, document.getElementById('api-key-setup-modal')]
+      [voiceModal, speedModal, docMenu, notesModal, languageModal, requestForm, fileSourceModal, editModal, apiModal]
         .forEach((m) => m && (m.style.display = 'none'));
       toggleLoader(false);
     }
@@ -4534,9 +4590,15 @@
         console.error('❌ No hay documento activo');
         return;
       }
-      
+
       console.log('▶️ Iniciando lectura:', documentoActivo.titulo);
-      
+
+      if (!userGoogleTTSKey && !hasAPIKeySkipPreference()) {
+        mostrarPopupError('🔑 Configura tu API Key de Google Cloud TTS para usar voces naturales');
+        mostrarApiKeySetupModal();
+        return;
+      }
+
       if (audioElement) {
         try { audioElement.pause(); } catch (e) {}
         if (audioObjectUrl) {
@@ -4548,10 +4610,16 @@
       
       highlightTexto(documentoActivo.texto);
       palabrasTotales = palabraElements.length;
-      
+
       console.log(`📝 ${palabrasTotales} palabras preparadas`);
-      
-      audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual);
+
+      const vozConfig = VOICE_CONFIG[vozSeleccionada] || getAvailableVoices().find((v) => v.nombre === vozSeleccionada);
+
+      if (!userGoogleTTSKey && hasAPIKeySkipPreference()) {
+        audioElement = await usarVozNavegador(documentoActivo.texto, vozConfig, velocidadActual);
+      } else {
+        audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual);
+      }
 
       if (audioElement?.src?.startsWith('blob:')) {
         audioObjectUrl = audioElement.src;
@@ -5306,7 +5374,12 @@
 
       const cancelApiKeyBtn = document.getElementById('cancel-api-key-setup');
       if (cancelApiKeyBtn) {
-        cancelApiKeyBtn.addEventListener('click', cerrarApiKeySetupModal);
+        cancelApiKeyBtn.addEventListener('click', marcarOmitirAPIKey);
+      }
+
+      const closeApiKeyBtn = document.getElementById('close-api-key-setup');
+      if (closeApiKeyBtn) {
+        closeApiKeyBtn.addEventListener('click', closeModals);
       }
 
         document.querySelectorAll('[data-action="config-api"]').forEach((el) => {
