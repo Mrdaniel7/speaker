@@ -2912,7 +2912,6 @@
           email: normalizedEmail,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           emailVerified: false,
-          plan: 'free',
           googleTTSKey: googleTTSKey || null,
           preferences: {
             voice: 'Sasha',
@@ -3065,8 +3064,7 @@
       if (!isFirebaseAvailable()) return;
       const payload = {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        googleTTSKey: googleTTSKey || null,
-        plan: 'free'
+        googleTTSKey: googleTTSKey || null
       };
       try {
         await firebase.firestore().collection('users').doc(userId).set(payload, { merge: true });
@@ -3106,7 +3104,6 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           onboardingCompleted: false,
-          plan: 'free',
           preferences: {
             voice: 'Sasha',
             speed: 1.0,
@@ -4129,10 +4126,6 @@
                 </div>
                 <p>Procesando tu voz con IA... <span id="progress-percent">0%</span></p>
               </div>
-            </div>
-            <div class="elevenlabs-note">
-              <p>💡 Powered by ElevenLabs Voice AI</p>
-              <a href="https://elevenlabs.io" target="_blank">Crear cuenta gratis</a>
             </div>
           </div>
         </div>
