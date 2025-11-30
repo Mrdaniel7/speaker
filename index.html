@@ -1465,8 +1465,10 @@
     const DEFAULT_API_KEY = 'AIzaSyC7zk08wM1t1UCTkzzfdVO2RZ_Z4OnhDSg';
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
 
+    const FIREBASE_API_KEY = "AIzaSyDigVte9WexPsg8gOvJcsuVVO_FX-r__7o";
+
     const firebaseConfig = {
-      apiKey: "AIzaSyDigVte9WexPsg8gOvJcsuVVO_FX-r__7o",
+      apiKey: FIREBASE_API_KEY,
       authDomain: "interfaces-4bc20.firebaseapp.com",
       projectId: "interfaces-4bc20",
       storageBucket: "interfaces-4bc20.firebasestorage.app",
@@ -1548,11 +1550,14 @@
       { label: 'Completo', value: '100%' }
     ];
 
+    const HIGH_CONTRAST_BACKGROUND = '#FFFF00';
+    const HIGH_CONTRAST_TEXT = '#000000';
+
     const COLOR_PRESETS = [
       { label: 'Negro sobre blanco', text: '#000000', bg: '#FFFFFF' },
       { label: 'Gris oscuro sobre crema', text: '#333333', bg: '#FFF8DC' },
       { label: 'Blanco sobre oscuro', text: '#FFFFFF', bg: '#1A1A1A' },
-      { label: 'Alto contraste', text: '#000000', bg: '#FFFF00' }
+      { label: 'Alto contraste', text: HIGH_CONTRAST_TEXT, bg: HIGH_CONTRAST_BACKGROUND }
     ];
 
     let currentUser = null;
@@ -2484,7 +2489,7 @@
       let cfg = { ...TEXT_CONFIG_DEFAULTS, ...textConfig };
 
       if (cfg.highContrast) {
-        cfg = { ...cfg, textColor: '#000000', backgroundColor: '#FFFF00' };
+        cfg = { ...cfg, textColor: HIGH_CONTRAST_TEXT, backgroundColor: HIGH_CONTRAST_BACKGROUND };
       }
 
       if (contrastRatio(cfg.textColor, cfg.backgroundColor) < 4.5 && !cfg.highContrast) {
@@ -3888,14 +3893,14 @@
       clearHighlights();
     });
 
-    highContrastToggle?.addEventListener('change', (e) => {
-      textConfig.highContrast = e.target.checked;
-      if (e.target.checked) {
-        textConfig.textColor = '#000000';
-        textConfig.backgroundColor = '#FFFF00';
-      }
-      applyTextConfig(true);
-    });
+      highContrastToggle?.addEventListener('change', (e) => {
+        textConfig.highContrast = e.target.checked;
+        if (e.target.checked) {
+          textConfig.textColor = HIGH_CONTRAST_TEXT;
+          textConfig.backgroundColor = HIGH_CONTRAST_BACKGROUND;
+        }
+        applyTextConfig(true);
+      });
 
     saveTextConfigBtn?.addEventListener('click', () => {
       applyTextConfig(true);
