@@ -1506,6 +1506,8 @@
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
     const FIREBASE_CONFIG_STORAGE_KEY = 'listen_ai_firebase_config_v1';
     const GUEST_MODE_KEY = 'isGuestMode';
+    const GUEST_API_KEY_STORAGE_KEY = 'googleTTSKey_guest';
+    const GUEST_SKIP_API_KEY_KEY = 'skipAPIKey_guest';
 
     const LEGACY_FIREBASE_CONFIG = {
       apiKey: "AIzaSyAsp5EL1SMvbD80F2bcJim9p62ceYwfgqc",
@@ -1564,6 +1566,18 @@
         localStorage.setItem(FIREBASE_CONFIG_STORAGE_KEY, JSON.stringify(sanitizeFirebaseConfig(config)));
       } catch (error) {
         console.error('❌ No se pudo guardar la configuración de Firebase', error);
+      }
+    }
+
+    function getGuestAPIKey() {
+      return localStorage.getItem(GUEST_API_KEY_STORAGE_KEY) || null;
+    }
+
+    function setGuestAPIKey(key) {
+      if (key) {
+        localStorage.setItem(GUEST_API_KEY_STORAGE_KEY, key);
+      } else {
+        localStorage.removeItem(GUEST_API_KEY_STORAGE_KEY);
       }
     }
 
@@ -2774,6 +2788,9 @@
       localStorage.setItem(GUEST_MODE_KEY, value ? 'true' : 'false');
       if (value) {
         currentUser = null;
+        userGoogleTTSKey = getGuestAPIKey();
+        actualizarEstadoAPIKeyUI(!!userGoogleTTSKey);
+        updateApiKeySettingsUI();
       }
     };
 
@@ -3198,8 +3215,9 @@
     }
 
     async function guardarDocumentoUsuario(doc) {
+      const userId = currentUser?.uid || 'guest';
       const docData = {
-        userId: currentUser?.uid || doc.userId || 'local',
+        userId: userId,
         title: doc.titulo,
         text: doc.texto,
         voice: doc.vozSeleccionada || vozSeleccionada,
@@ -3213,14 +3231,28 @@
       };
 
       try {
-        const firestoreId = await saveUserDocument(currentUser.uid, docData);
-        const localDoc = { ...doc, id: firestoreId, userId: currentUser.uid };
+        if (isFirebaseAvailable() && currentUser?.uid && !isGuestMode) {
+          const firestoreId = await saveUserDocument(currentUser.uid, docData);
+          const localDoc = { ...doc, id: firestoreId, userId: currentUser.uid };
+          await addDocumento(localDoc);
+          documentos = await getDocumentos(currentUser.uid);
+          renderDocumentos();
+          mostrarPopupExito('Documento guardado en tu cuenta');
+          return firestoreId;
+        }
+
+        const localDoc = { ...doc, id: doc.id || generateId(), userId };
         await addDocumento(localDoc);
-        documentos = await getDocumentos(currentUser.uid);
+        documentos = await getDocumentos(userId);
         renderDocumentos();
-        mostrarPopupExito('Documento guardado en tu cuenta');
-        return firestoreId;
+        mostrarPopupExito('Documento guardado localmente');
+        return localDoc.id;
       } catch (error) {
+        if (isGuestMode || !isFirebaseAvailable()) {
+          console.error('❌ Error guardando documento local', error);
+          mostrarPopupError('No se pudo guardar el documento localmente. Intenta de nuevo.');
+          return null;
+        }
         handleFirebaseOperationError('guardar documento de usuario', error);
         return null;
       }
@@ -3458,9 +3490,16 @@
 
     const getStoredApiKey = () => userGoogleTTSKey;
     const setStoredApiKey = async (key) => {
-      if (currentUser?.uid) {
+      if (!isGuestMode && currentUser?.uid && isFirebaseAvailable()) {
         await saveUserAPIKey(currentUser.uid, key);
         localStorage.setItem(`skipAPIKey_${currentUser.uid}`, 'false');
+      } else {
+        if (key) {
+          setGuestAPIKey(key);
+          localStorage.setItem(GUEST_SKIP_API_KEY_KEY, 'false');
+        } else {
+          setGuestAPIKey(null);
+        }
       }
       userGoogleTTSKey = key;
       window.dispatchEvent(new Event('apiKeyUpdated'));
@@ -3534,7 +3573,7 @@
       const currentKeyInput = document.getElementById('current-api-key');
 
       if (apiKeySettings) {
-        apiKeySettings.style.display = currentUser ? 'block' : 'none';
+        apiKeySettings.style.display = 'block';
       }
 
       if (currentKeyInput) {
@@ -3582,24 +3621,14 @@
         mostrarPopupError(message || 'API Key inválida o sin permisos.');
         return;
       }
-
-      if (!currentUser?.uid) {
-        mostrarPopupError('Inicia sesión para guardar tu API key.');
-        return;
-      }
-
       await setStoredApiKey(apiKey);
       actualizarEstadoAPIKeyUI(true);
       updateApiKeySettingsUI();
       cerrarApiKeySetupModal();
-      mostrarPopupExito('✅ API Key guardada en tu cuenta');
+      mostrarPopupExito(isGuestMode ? '✅ API Key guardada localmente' : '✅ API Key guardada en tu cuenta');
     }
 
     function editAPIKey() {
-      if (!currentUser) {
-        mostrarPopupError('Inicia sesión para configurar tu API key.');
-        return;
-      }
       mostrarApiKeySetupModal();
     }
 
@@ -3793,13 +3822,21 @@
     }
 
     async function inicializarAPIKey() {
+      const skipAPIKey = isGuestMode
+        ? localStorage.getItem(GUEST_SKIP_API_KEY_KEY) === 'true'
+        : localStorage.getItem(`skipAPIKey_${currentUser?.uid}`) === 'true';
+      const candidateKey = isGuestMode ? getGuestAPIKey() : getStoredApiKey();
+
+      if (candidateKey && isGuestMode) {
+        userGoogleTTSKey = candidateKey;
+        actualizarEstadoAPIKeyUI(true);
+        return true;
+      }
+
       if (!currentUser?.uid) {
         actualizarEstadoAPIKeyUI(false);
         return false;
       }
-
-      const skipAPIKey = localStorage.getItem(`skipAPIKey_${currentUser.uid}`) === 'true';
-      const candidateKey = getStoredApiKey();
 
       if (skipAPIKey && !candidateKey) {
         logDebug('API Key omitida por preferencia del usuario');
@@ -4195,11 +4232,17 @@
     }
 
     async function renderDocumentos() {
-      if (!currentUser || !currentUser.emailVerified) {
+      const targetUserId = isGuestMode ? 'guest' : currentUser?.uid;
+      if (!targetUserId) {
         docList.innerHTML = '<p style="padding:16px; color:#666;">Inicia sesión para ver tus documentos.</p>';
         return;
       }
-      documentos = await getDocumentos(currentUser.uid);
+
+      documentos = await getDocumentos(targetUserId);
+      if (!documentos.length && isGuestMode) {
+        docList.innerHTML = '<p style="padding:16px; color:#666;">Añade tu primer documento para verlo aquí.</p>';
+        return;
+      }
       docList.innerHTML = '';
       documentos.filter(filtrarDoc).forEach((doc) => docList.appendChild(crearDocumentoItem(doc)));
     }
@@ -5022,6 +5065,7 @@
           console.warn('Firebase no disponible. Usando modo local.');
         }
         await inicializarAPIKey();
+        await renderDocumentos();
 
       // ✅ BOTÓN DE API KEY EN HEADER
       const btnApiStatus = document.getElementById('btn-api-status');
