@@ -1482,12 +1482,12 @@
     }
 
     const errorMessages = {
-      'auth/email-already-in-use': 'Este email ya está registrado',
+      'auth/email-already-in-use': 'Este email ya tiene cuenta. ¿Deseas iniciar sesión?',
       'auth/invalid-email': 'Email inválido',
       'auth/invalid-credential': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
       'auth/invalid-login-credentials': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
       'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres)',
-      'auth/user-not-found': 'Usuario no encontrado',
+      'auth/user-not-found': 'No existe una cuenta con este email. ¿Deseas crear una cuenta?',
       'auth/wrong-password': 'Contraseña incorrecta',
       'auth/network-request-failed': 'Error de conexión. Verifica tu internet.'
     };
@@ -2633,18 +2633,41 @@
       authSuccess.style.display = 'none';
     }
 
-    function showAuthErrorMessage(message, includeSignupLink = false) {
+    function showAuthErrorMessage(message, options = {}) {
       if (!authError) return;
-      const extraLink = includeSignupLink ? ` <button id="switch-to-signup" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Crear cuenta</button>` : '';
-      authError.innerHTML = `${message}${extraLink}`;
+      const normalizedOptions = typeof options === 'boolean' ? { includeSignupLink: options } : options;
+      const { includeSignupLink = false, includeLoginLink = false, loginEmail = '' } = normalizedOptions;
+
+      const signupLink = includeSignupLink
+        ? ` <button id="switch-to-signup" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Crear cuenta</button>`
+        : '';
+      const loginLink = includeLoginLink
+        ? ` <button id="switch-to-login" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Iniciar sesión</button>`
+        : '';
+
+      authError.innerHTML = `${message}${signupLink}${loginLink}`;
       authError.style.display = 'block';
       authSuccess.style.display = 'none';
+
       if (includeSignupLink) {
         const switchBtn = document.getElementById('switch-to-signup');
         switchBtn?.addEventListener('click', (e) => {
           e.preventDefault();
           toggleAuthForms(true);
           document.getElementById('signup-email')?.focus();
+        });
+      }
+
+      if (includeLoginLink) {
+        const switchLoginBtn = document.getElementById('switch-to-login');
+        switchLoginBtn?.addEventListener('click', (e) => {
+          e.preventDefault();
+          toggleAuthForms(false);
+          const loginEmailInput = document.getElementById('login-email');
+          if (loginEmailInput && loginEmail) {
+            loginEmailInput.value = loginEmail;
+          }
+          loginEmailInput?.focus();
         });
       }
     }
@@ -2698,7 +2721,32 @@
         return { success: true, user, message: user.emailVerified ? 'Sesión iniciada correctamente' : 'Sesión iniciada, verifica tu email para mayor seguridad.' };
       } catch (error) {
         console.error('Error de inicio de sesión:', error);
-        return { success: false, message: errorMessages[error.code] || error.message, code: error.code };
+        let message = errorMessages[error.code] || error.message;
+        if (error.code === 'auth/invalid-login-credentials') {
+          message = 'Email o contraseña incorrectos. Si acabas de crear tu cuenta, intenta de nuevo.';
+        } else if (error.code === 'auth/user-not-found') {
+          message = 'No existe una cuenta con este email. ¿Deseas crear una cuenta?';
+        } else if (error.code === 'auth/wrong-password') {
+          message = 'Contraseña incorrecta. ¿Olvidaste tu contraseña?';
+        }
+        return { success: false, message, code: error.code };
+      }
+    }
+
+    async function resetPassword(email) {
+      try {
+        await firebase.auth().sendPasswordResetEmail(email);
+        authError.style.display = 'none';
+        authSuccess.textContent = 'Email de recuperación enviado. Revisa tu bandeja de entrada.';
+        authSuccess.style.display = 'block';
+      } catch (error) {
+        authSuccess.style.display = 'none';
+        if (error.code === 'auth/user-not-found') {
+          authError.textContent = 'No existe cuenta con este email.';
+        } else {
+          authError.textContent = 'Error al enviar email: ' + (error.message || 'Inténtalo más tarde');
+        }
+        authError.style.display = 'block';
       }
     }
 
@@ -2867,7 +2915,7 @@
           }
 
           setButtonLoading(signupButton, true, 'Creando cuenta');
-          const { success, message } = await signupUser(email, password);
+          const { success, message, code } = await signupUser(email, password);
           setButtonLoading(signupButton, false);
           if (success) {
             signupForm.reset();
@@ -2878,7 +2926,13 @@
             showMainApp();
           } else {
             authSuccess.style.display = 'none';
-            showAuthErrorMessage(message, true);
+            const emailExists = code === 'auth/email-already-in-use';
+            showAuthErrorMessage(
+              message,
+              emailExists
+                ? { includeLoginLink: true, loginEmail: email }
+                : { includeSignupLink: true }
+            );
           }
         });
       }
@@ -2906,8 +2960,9 @@
             showMainApp();
           } else {
             authSuccess.style.display = 'none';
-            const suggestSignup = ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code);
-            showAuthErrorMessage(message, suggestSignup);
+            const suggestSignup = ['auth/user-not-found', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code);
+            const options = suggestSignup ? { includeSignupLink: true } : {};
+            showAuthErrorMessage(message, options);
           }
         });
       }
@@ -2921,16 +2976,7 @@
             authError.style.display = 'block';
             return;
           }
-          try {
-            await firebase.auth().sendPasswordResetEmail(email);
-            authError.style.display = 'none';
-            authSuccess.textContent = 'Revisa tu correo para restablecer la contraseña';
-            authSuccess.style.display = 'block';
-          } catch (error) {
-            authSuccess.style.display = 'none';
-            authError.textContent = errorMessages[error.code] || error.message;
-            authError.style.display = 'block';
-          }
+          await resetPassword(email);
         });
       }
 
