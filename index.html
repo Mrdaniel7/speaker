@@ -1484,6 +1484,8 @@
     const errorMessages = {
       'auth/email-already-in-use': 'Este email ya está registrado',
       'auth/invalid-email': 'Email inválido',
+      'auth/invalid-credential': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
+      'auth/invalid-login-credentials': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
       'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres)',
       'auth/user-not-found': 'Usuario no encontrado',
       'auth/wrong-password': 'Contraseña incorrecta',
@@ -2607,8 +2609,7 @@
       if (authScreen) authScreen.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'none';
       if (message) {
-        authError.textContent = message;
-        authError.style.display = 'block';
+        showAuthErrorMessage(message, true);
       }
     }
 
@@ -2630,6 +2631,22 @@
       if (subtitle) subtitle.textContent = showSignup ? 'Regístrate para guardar tus documentos en la nube' : 'Inicia sesión para acceder a tu biblioteca';
       authError.style.display = 'none';
       authSuccess.style.display = 'none';
+    }
+
+    function showAuthErrorMessage(message, includeSignupLink = false) {
+      if (!authError) return;
+      const extraLink = includeSignupLink ? ` <button id="switch-to-signup" style="border:none;background:none;color:var(--naranja-botones);font-weight:800;cursor:pointer;text-decoration:underline;">Crear cuenta</button>` : '';
+      authError.innerHTML = `${message}${extraLink}`;
+      authError.style.display = 'block';
+      authSuccess.style.display = 'none';
+      if (includeSignupLink) {
+        const switchBtn = document.getElementById('switch-to-signup');
+        switchBtn?.addEventListener('click', (e) => {
+          e.preventDefault();
+          toggleAuthForms(true);
+          document.getElementById('signup-email')?.focus();
+        });
+      }
     }
 
     function setButtonLoading(button, isLoading, label) {
@@ -2662,9 +2679,10 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           emailVerified: false
         });
-        return { success: true, message: 'Cuenta creada. Revisa tu email para verificar.' };
+        return { success: true, message: 'Cuenta creada y sesión iniciada. Revisa tu email para verificar.', user };
       } catch (error) {
-        return { success: false, message: errorMessages[error.code] || error.message };
+        console.error('Error al crear cuenta:', error);
+        return { success: false, message: errorMessages[error.code] || error.message, code: error.code };
       }
     }
 
@@ -2675,12 +2693,12 @@
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
         const user = userCredential.user;
         if (!user.emailVerified) {
-          await firebase.auth().signOut();
-          return { success: false, message: 'Por favor verifica tu email antes de continuar.' };
+          console.warn('Email no verificado, se permite acceso pero se recomienda verificar.');
         }
-        return { success: true, user };
+        return { success: true, user, message: user.emailVerified ? 'Sesión iniciada correctamente' : 'Sesión iniciada, verifica tu email para mayor seguridad.' };
       } catch (error) {
-        return { success: false, message: errorMessages[error.code] || error.message };
+        console.error('Error de inicio de sesión:', error);
+        return { success: false, message: errorMessages[error.code] || error.message, code: error.code };
       }
     }
 
@@ -2696,8 +2714,17 @@
       const flagKey = 'testAccountCreated';
       if (localStorage.getItem(flagKey) === 'true') return;
       try {
+        if (firebase.auth().currentUser) return;
+        const methods = await firebase.auth().fetchSignInMethodsForEmail('danieltrigre7@gmail.com');
+        if (methods.length > 0) {
+          localStorage.setItem(flagKey, 'true');
+          return;
+        }
         const result = await signupUser('danieltrigre7@gmail.com', 'rafadfani77');
         console.log('Test account creation result:', result.message);
+        if (firebase.auth().currentUser?.email === 'danieltrigre7@gmail.com') {
+          await firebase.auth().signOut();
+        }
         localStorage.setItem(flagKey, 'true');
       } catch (error) {
         console.log('Test account may already exist:', error.message);
@@ -2825,20 +2852,17 @@
           const confirm = document.getElementById('signup-confirm').value.trim();
 
           if (!validateEmailFormat(email)) {
-            authError.textContent = 'Email inválido';
-            authError.style.display = 'block';
+            showAuthErrorMessage('Email inválido');
             return;
           }
 
           if (password.length < 6) {
-            authError.textContent = 'Contraseña muy débil (mínimo 6 caracteres)';
-            authError.style.display = 'block';
+            showAuthErrorMessage('Contraseña muy débil (mínimo 6 caracteres)');
             return;
           }
 
           if (password !== confirm) {
-            authError.textContent = 'Las contraseñas no coinciden';
-            authError.style.display = 'block';
+            showAuthErrorMessage('Las contraseñas no coinciden');
             return;
           }
 
@@ -2846,13 +2870,15 @@
           const { success, message } = await signupUser(email, password);
           setButtonLoading(signupButton, false);
           if (success) {
+            signupForm.reset();
             authError.style.display = 'none';
             authSuccess.textContent = message;
             authSuccess.style.display = 'block';
+            toggleAuthForms(false);
+            showMainApp();
           } else {
             authSuccess.style.display = 'none';
-            authError.textContent = message;
-            authError.style.display = 'block';
+            showAuthErrorMessage(message, true);
           }
         });
       }
@@ -2864,23 +2890,24 @@
           const password = document.getElementById('login-password').value.trim();
 
           if (!validateEmailFormat(email)) {
-            authError.textContent = 'Email inválido';
-            authError.style.display = 'block';
+            showAuthErrorMessage('Email inválido');
             return;
           }
 
           setButtonLoading(loginButton, true, 'Iniciando sesión');
-          const { success, message } = await loginUser(email, password, rememberMe?.checked);
+          const { success, message, code } = await loginUser(email, password, rememberMe?.checked);
           setButtonLoading(loginButton, false);
 
           if (success) {
+            loginForm.reset();
             authError.style.display = 'none';
-            authSuccess.textContent = 'Bienvenido de vuelta!';
+            authSuccess.textContent = message || 'Bienvenido de vuelta!';
             authSuccess.style.display = 'block';
+            showMainApp();
           } else {
             authSuccess.style.display = 'none';
-            authError.textContent = message;
-            authError.style.display = 'block';
+            const suggestSignup = ['auth/user-not-found', 'auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(code);
+            showAuthErrorMessage(message, suggestSignup);
           }
         });
       }
@@ -2923,12 +2950,15 @@
         applyTextConfig(true);
         updateAccountInfo(user);
 
-        if (user && user.emailVerified) {
+        if (user) {
           showMainApp();
           await syncUserDocuments(user.uid);
           mostrarPopupExito('Sesión iniciada correctamente');
+          if (!user.emailVerified) {
+            mostrarPopupError('Tu email aún no está verificado. Revisa tu bandeja para mayor seguridad.');
+          }
         } else {
-          showLoginScreen(user ? 'Por favor verifica tu email antes de continuar.' : 'Inicia sesión para continuar');
+          showLoginScreen('Inicia sesión para continuar');
         }
       });
     }
