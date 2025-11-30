@@ -1517,11 +1517,13 @@
     const errorMessages = {
       'auth/email-already-in-use': 'Este email ya tiene cuenta. ¿Deseas iniciar sesión?',
       'auth/invalid-email': 'Email inválido',
-      'auth/invalid-credential': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
-      'auth/invalid-login-credentials': 'Email o contraseña incorrectos. ¿No tienes cuenta? Regístrate',
+      'auth/invalid-credential': 'Email o contraseña incorrectos. Inténtalo de nuevo.',
+      'auth/invalid-login-credentials': 'Email o contraseña incorrectos. Inténtalo de nuevo.',
       'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres)',
       'auth/user-not-found': 'No existe una cuenta con este email. ¿Deseas crear una cuenta?',
-      'auth/wrong-password': 'Contraseña incorrecta',
+      'auth/wrong-password': 'Contraseña incorrecta. Inténtalo de nuevo.',
+      'auth/user-disabled': 'Esta cuenta ha sido deshabilitada',
+      'auth/too-many-requests': 'Demasiados intentos fallidos. Intenta más tarde.',
       'auth/network-request-failed': 'Error de conexión. Verifica tu internet.'
     };
 
@@ -2768,12 +2770,6 @@
         encodedPasswordSample: encodeURIComponent(plainPassword).slice(0, 20)
       });
       try {
-        const methods = await firebase.auth().fetchSignInMethodsForEmail(normalizedEmail).catch(() => []);
-        authLog('📧 Métodos disponibles para email', { normalizedEmail, methods });
-        if (!methods.length) {
-          return { success: false, message: 'No existe una cuenta con este email. ¿Deseas crear una cuenta?', code: 'auth/user-not-found' };
-        }
-
         const persistence = remember ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
         await firebase.auth().setPersistence(persistence);
         authLog('💾 Persistencia configurada', { persistence: remember ? 'LOCAL' : 'SESSION' });
@@ -2811,19 +2807,13 @@
         }
 
         const error = lastError || new Error('Error desconocido al iniciar sesión');
-        let message = errorMessages[error.code] || error.message;
-        if (error.code === 'auth/invalid-login-credentials') {
-          message = 'Email o contraseña incorrectos. Si acabas de crear tu cuenta, intenta de nuevo.';
+        let message = errorMessages[error.code] || error.message || 'Ocurrió un error al iniciar sesión. Inténtalo de nuevo.';
+        if (error.code === 'auth/invalid-login-credentials' || error.code === 'auth/invalid-credential') {
+          message = 'Email o contraseña incorrectos. Inténtalo de nuevo.';
         } else if (error.code === 'auth/user-not-found') {
           message = 'No existe una cuenta con este email. ¿Deseas crear una cuenta?';
         } else if (error.code === 'auth/wrong-password') {
-          message = 'Contraseña incorrecta. ¿Olvidaste tu contraseña?';
-        } else if (error.code === 'auth/invalid-credential') {
-          const refreshedMethods = await firebase.auth().fetchSignInMethodsForEmail(normalizedEmail).catch(() => []);
-          authLog('🔍 Métodos verificados tras error', { normalizedEmail, refreshedMethods });
-          if (!refreshedMethods.length) {
-            message = 'No existe una cuenta con este email. ¿Deseas crear una cuenta?';
-          }
+          message = 'Contraseña incorrecta. Inténtalo de nuevo.';
         } else if (error.code === 'auth/unverified-email') {
           message = 'Tu email no está verificado. Revisa tu bandeja o solicita un nuevo enlace.';
         }
