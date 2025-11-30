@@ -127,6 +127,13 @@
       justify-content: center;
       gap: 8px;
     }
+    .auth-button-ghost {
+      background: transparent;
+      color: var(--naranja-botones);
+      border: 2px solid var(--naranja-botones);
+      box-shadow: none;
+    }
+    .auth-button-ghost:hover { background: rgba(255, 149, 0, 0.08); }
     .auth-button:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; transform: none; }
     .auth-links { display: flex; justify-content: space-between; font-size: 14px; color: var(--texto-gris); }
     .auth-links a { color: var(--naranja-botones); text-decoration: none; font-weight: 700; }
@@ -957,6 +964,7 @@
           <a href="#" id="forgot-password">¿Olvidaste tu contraseña?</a>
         </div>
         <button type="submit" class="auth-button" id="login-button">Iniciar Sesión</button>
+        <button type="button" class="auth-button auth-button-ghost" id="guest-button">Continuar como Invitado</button>
       </form>
 
       <form id="signup-form" class="auth-form" style="display:none;">
@@ -1493,31 +1501,11 @@
     </div>
   </div>
 
-  <div id="firebase-config-modal" class="modal-overlay" style="display:none; align-items: center; justify-content: center;">
-    <div class="modal-api-key" style="background:#fff; padding:24px; border-radius:16px; max-width:520px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.15); position: relative;">
-      <button class="btn-cerrar" data-close="firebase-config" style="position:absolute; right:12px; top:12px;">×</button>
-      <h3 style="margin-top:0; margin-bottom:12px;">Proyecto de Firebase</h3>
-      <p id="firebase-config-hint" style="margin-top:0; color:#555;">Ingresa las credenciales de tu propio proyecto de Firebase para habilitar Firestore, Auth y Storage.</p>
-      <div style="display:grid; gap:10px; margin-top:12px;">
-        <label style="font-weight:600;">apiKey<input type="text" id="firebase-api-key" placeholder="AIza..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">authDomain<input type="text" id="firebase-auth-domain" placeholder="proyecto.firebaseapp.com" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">projectId<input type="text" id="firebase-project-id" placeholder="mi-proyecto" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">storageBucket<input type="text" id="firebase-storage-bucket" placeholder="mi-proyecto.appspot.com" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">messagingSenderId<input type="text" id="firebase-messaging-sender" placeholder="000000000000" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">appId<input type="text" id="firebase-app-id" placeholder="1:...:web:..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-        <label style="font-weight:600;">measurementId (opcional)<input type="text" id="firebase-measurement-id" placeholder="G-XXXX" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;"></label>
-      </div>
-      <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-        <button class="btn-secundario" type="button" id="cancel-firebase-config">Cancelar</button>
-        <button class="btn-primario" type="button" id="save-firebase-config">Guardar y recargar</button>
-      </div>
-    </div>
-  </div>
-
   <script type="module">
     let userGoogleTTSKey = null;
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
     const FIREBASE_CONFIG_STORAGE_KEY = 'listen_ai_firebase_config_v1';
+    const GUEST_MODE_KEY = 'isGuestMode';
 
     const LEGACY_FIREBASE_CONFIG = {
       apiKey: "AIzaSyDigVtE9WexPsg0gOvjcsuYVO_FX-r__7o",
@@ -1542,6 +1530,7 @@
     let firebaseAppInitialized = false;
     let firebaseConfigInUse = null;
     let lastFirebaseInitError = null;
+    let isGuestMode = localStorage.getItem(GUEST_MODE_KEY) === 'true';
 
     function sanitizeFirebaseConfig(rawConfig = {}) {
       const clean = { ...DEFAULT_FIREBASE_CONFIG, ...rawConfig };
@@ -1590,10 +1579,11 @@
     }
 
     function ensureFirebaseReady(context = 'operación') {
+      if (isGuestMode) return false;
       if (firebaseAppInitialized) return true;
-      console.error(`❌ Firebase no está configurado. Acción bloqueada: ${context}`);
-      mostrarFirebaseConfigModal(`Configura tu proyecto de Firebase para continuar con ${context}.`);
-      throw new Error('Firebase no inicializado');
+      console.warn(`ℹ️ Firebase no está configurado o disponible para ${context}.`);
+      lastFirebaseInitError = lastFirebaseInitError || new Error('Firebase no inicializado');
+      return false;
     }
 
     function handleFirebaseOperationError(context, error) {
@@ -1607,6 +1597,11 @@
     }
 
     function initializeFirebaseApp() {
+      if (isGuestMode) {
+        firebaseAppInitialized = false;
+        updateFirebaseStatusLabel('Modo invitado');
+        return;
+      }
       const config = getActiveFirebaseConfig();
       firebaseConfigInUse = config;
 
@@ -2496,6 +2491,7 @@
     const authError = document.getElementById('auth-error');
     const authSuccess = document.getElementById('auth-success');
     const loginButton = document.getElementById('login-button');
+    const guestButton = document.getElementById('guest-button');
     const signupButton = document.getElementById('signup-button');
     const rememberMe = document.getElementById('remember-me');
     const forgotPassword = document.getElementById('forgot-password');
@@ -2773,6 +2769,16 @@
     let audioElement = null;
     let audioObjectUrl = null;
 
+    const setGuestMode = (value) => {
+      isGuestMode = value;
+      localStorage.setItem(GUEST_MODE_KEY, value ? 'true' : 'false');
+      if (value) {
+        currentUser = null;
+      }
+    };
+
+    const isFirebaseAvailable = () => !isGuestMode && firebaseAppInitialized;
+
     function showLoginScreen(message = '') {
       if (authScreen) authScreen.style.display = 'flex';
       if (appContainer) appContainer.style.display = 'none';
@@ -2785,6 +2791,10 @@
       if (authScreen) authScreen.style.display = 'none';
       if (appContainer) appContainer.style.display = 'block';
       switchPage('home');
+      if (isGuestMode) {
+        updateAccountInfo(null);
+        updateFirebaseStatusLabel('Modo invitado');
+      }
     }
 
     function toggleAuthForms(showSignup) {
@@ -2854,18 +2864,22 @@
     }
 
     function updateAccountInfo(user) {
-      if (userEmailDisplay) userEmailDisplay.textContent = user?.email || 'Sin sesión';
+      const emailText = isGuestMode ? 'Modo invitado' : (user?.email || 'Sin sesión');
+      if (userEmailDisplay) userEmailDisplay.textContent = emailText;
       if (emailVerifiedBadge) {
-        emailVerifiedBadge.textContent = user?.emailVerified ? 'Email verificado ✅' : 'Verifica tu email para continuar';
-        emailVerifiedBadge.style.color = user?.emailVerified ? '#1B8E5A' : '#C0392B';
+        const verified = user?.emailVerified;
+        emailVerifiedBadge.textContent = isGuestMode
+          ? 'Sesión local sin verificación'
+          : verified
+            ? 'Email verificado ✅'
+            : 'Verifica tu email para continuar';
+        emailVerifiedBadge.style.color = verified ? '#1B8E5A' : '#C0392B';
       }
     }
 
     async function signupUser(email, password) {
-      try {
-        ensureFirebaseReady('crear cuenta');
-      } catch (error) {
-        return { success: false, message: 'Configura Firebase antes de crear una cuenta.', code: 'firebase/not-configured' };
+      if (!ensureFirebaseReady('crear cuenta')) {
+        return { success: false, message: 'Firebase no está disponible. Usa modo invitado o intenta más tarde.', code: 'firebase/unavailable' };
       }
       const normalizedEmail = normalizeEmail(email);
       const plainPassword = password ?? '';
@@ -2891,10 +2905,8 @@
     }
 
     async function loginUser(email, password, remember) {
-      try {
-        ensureFirebaseReady('iniciar sesión');
-      } catch (error) {
-        return { success: false, message: 'Configura Firebase antes de iniciar sesión.', code: 'firebase/not-configured' };
+      if (!ensureFirebaseReady('iniciar sesión')) {
+        return { success: false, message: 'Firebase no está disponible. Prueba modo invitado o revisa tu conexión.', code: 'firebase/unavailable' };
       }
       const normalizedEmail = normalizeEmail(email);
       const plainPassword = password ?? '';
@@ -2962,7 +2974,9 @@
 
     async function resetPassword(email) {
       try {
-        ensureFirebaseReady('recuperar contraseña');
+        if (!ensureFirebaseReady('recuperar contraseña')) {
+          throw new Error('Firebase no disponible para recuperar contraseña');
+        }
         authLog('🔁 Solicitud de reset de contraseña', { email });
         await firebase.auth().sendPasswordResetEmail(email);
         authError.style.display = 'none';
@@ -2982,13 +2996,14 @@
 
     async function logoutUser() {
       authLog('🚪 Cerrando sesión manualmente');
-      if (firebaseAppInitialized) {
+      if (isFirebaseAvailable()) {
         try {
           await firebase.auth().signOut();
         } catch (error) {
           handleFirebaseOperationError('cerrar sesión', error);
         }
       }
+      setGuestMode(false);
       await clearLocalDocumentos();
       documentos = [];
       userGoogleTTSKey = null;
@@ -3000,6 +3015,7 @@
     async function createTestAccount() {
       const flagKey = 'testAccountCreated';
       if (localStorage.getItem(flagKey) === 'true') return;
+      if (!isFirebaseAvailable()) return;
       try {
         ensureFirebaseReady('crear cuenta de prueba');
         if (firebase.auth().currentUser) return;
@@ -3021,7 +3037,7 @@
     }
 
     async function saveUserAPIKey(userId, googleTTSKey) {
-      ensureFirebaseReady('guardar API Key');
+      if (!isFirebaseAvailable()) return;
       const payload = {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
@@ -3039,7 +3055,7 @@
     }
 
     async function getUserAPIKey(userId) {
-      ensureFirebaseReady('leer API Key');
+      if (!isFirebaseAvailable()) return null;
       try {
         const docRef = await firebase.firestore().collection('userSettings').doc(userId).get();
         authLog('🔎 Consultando API key guardada', { userId, exists: docRef.exists });
@@ -3055,7 +3071,7 @@
     }
 
     async function ensureUserSettings(userId, email, fromSignup = false) {
-      ensureFirebaseReady('sincronizar ajustes de usuario');
+      if (!isFirebaseAvailable()) return null;
       const settingsRef = firebase.firestore().collection('userSettings').doc(userId);
       try {
         const doc = await settingsRef.get();
@@ -3079,7 +3095,7 @@
     }
 
     async function saveUserDocument(userId, docData) {
-      ensureFirebaseReady('guardar documento');
+      if (!isFirebaseAvailable()) return null;
       try {
         const docRef = await firebase.firestore().collection('documents').add({
           userId,
@@ -3104,7 +3120,7 @@
     }
 
     async function loadUserDocuments(userId) {
-      ensureFirebaseReady('cargar documentos');
+      if (!isFirebaseAvailable()) return [];
       try {
         authLog('📂 Descargando documentos de usuario', { userId });
         const snapshot = await firebase.firestore()
@@ -3142,7 +3158,7 @@
     }
 
     async function updateFirestoreDocument(id, updates) {
-      ensureFirebaseReady('actualizar documento');
+      if (!isFirebaseAvailable()) return null;
       const payload = { ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
       try {
         return await firebase.firestore().collection('documents').doc(id).update(payload);
@@ -3153,7 +3169,7 @@
     }
 
     async function deleteFirestoreDocument(id) {
-      ensureFirebaseReady('eliminar documento');
+      if (!isFirebaseAvailable()) return null;
       try {
         return await firebase.firestore().collection('documents').doc(id).delete();
       } catch (error) {
@@ -3164,7 +3180,7 @@
 
     async function syncUserDocuments(userId) {
       try {
-        ensureFirebaseReady('sincronizar biblioteca');
+        if (!isFirebaseAvailable()) return;
         toggleLoader(true, 'Cargando tu biblioteca', 'Sincronizando documentos de tu cuenta...');
         const docs = await loadUserDocuments(userId);
         await clearLocalDocumentos();
@@ -3224,6 +3240,8 @@
           const password = document.getElementById('signup-password').value;
           const confirm = document.getElementById('signup-confirm').value;
           authLog('✉️ Email normalizado en signup', { rawEmail, normalizedEmail: email });
+          setGuestMode(false);
+          initializeFirebaseApp();
 
           if (!validateEmailFormat(email)) {
             showAuthErrorMessage('Email inválido');
@@ -3244,6 +3262,7 @@
           const { success, message, code } = await signupUser(email, password);
           setButtonLoading(signupButton, false);
           if (success) {
+            setGuestMode(false);
             signupForm.reset();
             authError.style.display = 'none';
             authSuccess.textContent = message;
@@ -3270,6 +3289,8 @@
           const email = normalizeEmail(rawEmail);
           const password = document.getElementById('login-password').value;
           authLog('✉️ Email normalizado en login', { rawEmail, normalizedEmail: email });
+          setGuestMode(false);
+          initializeFirebaseApp();
 
           if (!validateEmailFormat(email)) {
             showAuthErrorMessage('Email inválido');
@@ -3281,6 +3302,7 @@
           setButtonLoading(loginButton, false);
 
           if (success) {
+            setGuestMode(false);
             loginForm.reset();
             authError.style.display = 'none';
             authSuccess.textContent = message || 'Bienvenido de vuelta!';
@@ -3292,6 +3314,17 @@
             const options = suggestSignup ? { includeSignupLink: true, errorCode: code } : { errorCode: code };
             showAuthErrorMessage(message, options);
           }
+        });
+      }
+
+      if (guestButton) {
+        guestButton.addEventListener('click', () => {
+          authError.style.display = 'none';
+          authSuccess.style.display = 'none';
+          setGuestMode(true);
+          updateFirebaseStatusLabel('Modo invitado');
+          updateAccountInfo(null);
+          showMainApp();
         });
       }
 
@@ -3317,8 +3350,11 @@
     }
 
     function initializeAuthWatcher() {
-      if (!firebaseAppInitialized) {
-        console.warn('ℹ️ Firebase no configurado. El estado de autenticación no se observará hasta configurarlo.');
+      if (!isFirebaseAvailable()) {
+        authInitialized = true;
+        if (isGuestMode) {
+          showMainApp();
+        }
         return;
       }
       firebase.auth().onAuthStateChanged(async (user) => {
@@ -3330,6 +3366,7 @@
         });
         currentUser = user;
         authInitialized = true;
+        if (user) setGuestMode(false);
         textConfig = loadTextConfig();
         hydrateTextConfigUI();
         applyTextConfig(true);
@@ -3523,69 +3560,11 @@
     function updateFirebaseStatusLabel(value) {
       const label = document.getElementById('firebase-status-label');
       if (label) {
-        label.textContent = value || 'Sin configurar';
-        label.style.color = firebaseAppInitialized ? '#1A1A1A' : '#FF3B30';
+        const displayValue = isGuestMode ? 'Modo invitado' : (value || 'Sin configurar');
+        label.textContent = displayValue;
+        const available = !isGuestMode && firebaseAppInitialized;
+        label.style.color = available ? '#1A1A1A' : '#FF3B30';
       }
-    }
-
-    function prefillFirebaseConfigForm(config) {
-      const safeConfig = sanitizeFirebaseConfig(config || firebaseConfigInUse || loadStoredFirebaseConfig());
-      const fields = {
-        'firebase-api-key': safeConfig.apiKey || '',
-        'firebase-auth-domain': safeConfig.authDomain || '',
-        'firebase-project-id': safeConfig.projectId || '',
-        'firebase-storage-bucket': safeConfig.storageBucket || '',
-        'firebase-messaging-sender': safeConfig.messagingSenderId || '',
-        'firebase-app-id': safeConfig.appId || '',
-        'firebase-measurement-id': safeConfig.measurementId || ''
-      };
-
-      Object.entries(fields).forEach(([id, value]) => {
-        const input = document.getElementById(id);
-        if (input) input.value = value;
-      });
-    }
-
-    function mostrarFirebaseConfigModal(message) {
-      const modal = document.getElementById('firebase-config-modal');
-      const hint = document.getElementById('firebase-config-hint');
-      if (!modal) return;
-      if (hint && message) {
-        hint.textContent = message;
-      } else if (hint) {
-        hint.textContent = 'Configura un proyecto propio para evitar errores de permisos y mantener tus datos seguros.';
-      }
-      prefillFirebaseConfigForm();
-      modal.style.display = 'flex';
-      toggleOverlay(true);
-    }
-
-    function cerrarFirebaseConfigModal() {
-      const modal = document.getElementById('firebase-config-modal');
-      if (modal) modal.style.display = 'none';
-      toggleOverlay(false);
-    }
-
-    function handleFirebaseConfigSave() {
-      const config = sanitizeFirebaseConfig({
-        apiKey: document.getElementById('firebase-api-key')?.value,
-        authDomain: document.getElementById('firebase-auth-domain')?.value,
-        projectId: document.getElementById('firebase-project-id')?.value,
-        storageBucket: document.getElementById('firebase-storage-bucket')?.value,
-        messagingSenderId: document.getElementById('firebase-messaging-sender')?.value,
-        appId: document.getElementById('firebase-app-id')?.value,
-        measurementId: document.getElementById('firebase-measurement-id')?.value
-      });
-
-      if (!validateFirebaseConfig(config)) {
-        mostrarPopupError('Completa todos los campos obligatorios de Firebase.');
-        return;
-      }
-
-      saveStoredFirebaseConfig(config);
-      updateFirebaseStatusLabel(config.projectId || 'Listo');
-      mostrarPopupExito('Configuración guardada. Recargando para aplicar cambios...');
-      setTimeout(() => window.location.reload(), 650);
     }
 
     async function saveAPIKey() {
@@ -5027,16 +5006,20 @@
         // ✅ FORZAR PÁGINA INICIAL
         switchPage('home');
         console.log('✅ Página inicial: home');
-        showLoginScreen();
+        if (isGuestMode) {
+          showMainApp();
+        } else {
+          showLoginScreen();
+        }
 
         bindCardEvents();
         setupAuthListeners();
-        updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (firebaseAppInitialized ? 'Listo' : 'Sin configurar'));
-        if (firebaseAppInitialized) {
+        updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (isFirebaseAvailable() ? 'Listo' : 'Sin configurar'));
+        if (isFirebaseAvailable()) {
           initializeAuthWatcher();
           createTestAccount();
-        } else {
-          mostrarFirebaseConfigModal('Configura tu proyecto de Firebase para continuar.');
+        } else if (!isGuestMode) {
+          console.warn('Firebase no disponible. Usando modo local.');
         }
         await inicializarAPIKey();
 
@@ -5067,16 +5050,9 @@
 
         document.querySelectorAll('[data-action="config-firebase"]').forEach((el) => {
           el.addEventListener('click', () => {
-            const message = lastFirebaseInitError
-              ? `Firebase no está listo (${lastFirebaseInitError.message}). Actualiza las credenciales para continuar.`
-              : 'Configura tu proyecto de Firebase para evitar errores de permisos.';
-            mostrarFirebaseConfigModal(message);
+            mostrarPopupExito('La app está funcionando en modo local. Firebase no es obligatorio.');
           });
         });
-
-        document.getElementById('save-firebase-config')?.addEventListener('click', handleFirebaseConfigSave);
-        document.getElementById('cancel-firebase-config')?.addEventListener('click', cerrarFirebaseConfigModal);
-        document.querySelector('[data-close="firebase-config"]')?.addEventListener('click', cerrarFirebaseConfigModal);
 
       loadVoices(() => renderVoices());
       setSpeed(velocidadActual);
