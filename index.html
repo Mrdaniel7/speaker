@@ -3182,14 +3182,8 @@
     }
 
     async function guardarDocumentoUsuario(doc) {
-      if (!currentUser || !currentUser.emailVerified) {
-        showLoginScreen('Inicia sesión y verifica tu email para guardar tus documentos');
-        mostrarPopupError('Inicia sesión para guardar y sincronizar tus audios');
-        return null;
-      }
-
       const docData = {
-        userId: currentUser.uid,
+        userId: currentUser?.uid || doc.userId || 'local',
         title: doc.titulo,
         text: doc.texto,
         voice: doc.vozSeleccionada || vozSeleccionada,
@@ -4738,9 +4732,33 @@
       fileSourceModal.style.display = 'block';
     }
 
+    function abrirSelectorArchivoLocalDirecto() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.pdf,.doc,.docx,.txt';
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await procesarArchivoSeleccionado(file);
+      };
+      input.click();
+    }
+
+    function abrirSelectorImagenLocalDirecto() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await procesarImagenParaOCR(file);
+      };
+      input.click();
+    }
+
     async function handleAction(action) {
-      if (action === 'archivo') abrirSelectorArchivos();
-      if (action === 'escanear') imageInput.click();
+      if (action === 'archivo') abrirSelectorArchivoLocalDirecto();
+      if (action === 'escanear') abrirSelectorImagenLocalDirecto();
       if (action === 'url') {
         mostrarPopupInput('Ingresa la URL', 'https://ejemplo.com', async (url) => {
           const texto = await extraerTextoURL(url);
@@ -4762,7 +4780,7 @@
     pickFromDevice.addEventListener('click', () => {
       fileSourceModal.style.display = 'none';
       toggleOverlay(false);
-      fileInput.click();
+      abrirSelectorArchivoLocalDirecto();
     });
 
     pickFromDrive.addEventListener('click', () => {
@@ -4780,10 +4798,7 @@
       });
     });
 
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
+    async function procesarArchivoSeleccionado(file) {
       try {
         toggleLoader(true, 'Procesando archivo', file.name);
         let texto = '';
@@ -4816,14 +4831,17 @@
         console.error(error);
       } finally {
         toggleLoader(false);
-        fileInput.value = '';
+        if (fileInput) fileInput.value = '';
       }
-    });
+    }
 
-    imageInput.addEventListener('change', async (e) => {
+    fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      await procesarArchivoSeleccionado(file);
+    });
 
+    async function procesarImagenParaOCR(file) {
       if (!file.type.startsWith('image/')) {
         mostrarPopupError('Por favor selecciona un archivo de imagen válido');
         return;
@@ -4887,8 +4905,14 @@
         mostrarPopupError(`Error al escanear: ${error.message}`);
         console.error(error);
       } finally {
-        imageInput.value = '';
+        if (imageInput) imageInput.value = '';
       }
+    }
+
+    imageInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await procesarImagenParaOCR(file);
     });
 
     function generarMiniaturaTexto(texto) {
