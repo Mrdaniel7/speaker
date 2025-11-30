@@ -218,7 +218,6 @@
     .ai-chip { width: 44px; height: 44px; border-radius: 14px; background: #E7F1FF; color: #2F80ED; display: grid; place-items: center; font-weight: 800; box-shadow: 0 4px 10px rgba(91,163,245,0.25); }
     .library-header h1 { font-size: 30px; font-weight: 800; margin-left: 4px; }
     .lib-icons { display: flex; gap: 10px; align-items: center; }
-    .badge-pro { background: linear-gradient(120deg, #FFD166, #FFB800); color: #7A4B00; padding: 6px 10px; border-radius: 12px; font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(255, 184, 0, 0.25); }
     .progress-circle { width: 42px; height: 42px; border-radius: 50%; border: 3px solid var(--azul-icono); display: grid; place-items: center; background: #fff; }
     .circle-text { color: var(--azul-icono); font-weight: 700; }
     .star-counter { background: #FFF3E0; padding: 6px 10px; border-radius: 12px; color: var(--amarillo-principal); font-weight: 700; border: 1px solid #FFE0B2; }
@@ -981,6 +980,10 @@
           <label for="signup-confirm">Confirmar contraseña</label>
           <input type="password" id="signup-confirm" placeholder="Repite tu contraseña" minlength="6" required />
         </div>
+        <div>
+          <label for="signup-api-key">API Key de Google TTS (opcional)</label>
+          <input type="password" id="signup-api-key" placeholder="Puedes agregarla ahora o después" />
+        </div>
         <button type="submit" class="auth-button" id="signup-button">Crear Cuenta</button>
       </form>
     </div>
@@ -1022,7 +1025,7 @@
           <div class="carousel-dots">
             <span class="active"></span><span></span><span></span><span></span><span></span><span></span><span></span>
           </div>
-          <button class="btn-secondary" id="btn-free">Prueba gratis</button>
+          <button class="btn-secondary" id="btn-free">Comenzar</button>
         </div>
         <div class="section-header">
           <h2>¿Qué quieres escuchar hoy?</h2>
@@ -1070,14 +1073,13 @@
         <header class="library-header">
           <div class="lib-left">
             <div class="ai-chip">AI</div>
-            <div>
-              <h1>Mi Biblioteca</h1>
+              <div>
+                <h1>Mi Biblioteca</h1>
               <div class="lib-icons">
-                <span class="badge-pro">PRO</span>
                 <div class="star-counter">⭐ <span>0</span></div>
               </div>
+              </div>
             </div>
-          </div>
           <div class="lib-icons">
             <div class="progress-circle" id="btn-api-status" title="Configurar API Key" style="cursor: pointer; transition: all 0.3s;">
               <span class="circle-text">🤖</span>
@@ -1196,7 +1198,7 @@
               <div class="icono-config">🔑</div>
               <div style="display:flex; flex-direction:column; gap:4px;">
                 <label style="font-weight:600;">Google TTS API Key:</label>
-                <input type="password" id="current-api-key" value="***********" readonly style="padding:8px 10px; border-radius:8px; border:1px solid #ddd; min-width:220px;">
+                <span id="current-api-key" style="font-weight:700; color:#1A1A1A;">Sin configurar</span>
               </div>
               <button class="btn-primario" style="margin-left:auto;" onclick="editAPIKey()">Cambiar</button>
             </div>
@@ -1408,7 +1410,7 @@
       <button data-action="finalizar"><span>✓</span> Marcar como Finalizado</button>
       <button data-action="favorito"><span>♥</span> Agregar a Favoritos</button>
       <div class="separador"></div>
-      <button data-action="saltar"><span>🔄</span> Saltar Contenido PRO</button>
+      <button data-action="saltar"><span>🔄</span> Saltar contenido</button>
       <button data-action="temporizador"><span>⏰</span> Temporizador de Sueño</button>
       <button data-action="exportar"><span>↗️</span> Exportar audio<p>Guarda el audio en el dispositivo o compártelo directamente.</p></button>
       <div class="separador"></div>
@@ -1460,7 +1462,7 @@
   </div>
 
   <input type="file" id="file-input" accept=".pdf,.doc,.docx,.txt" style="display:none" />
-  <input type="file" id="image-input" accept="image/*" style="display:none" />
+  <input type="file" id="image-input" accept="image/*" multiple style="display:none" />
 
   <div class="modal-editar" id="edit-modal">
     <div class="modal-header" style="margin-bottom:6px;">
@@ -1585,8 +1587,7 @@
     function getActiveFirebaseConfig() {
       const stored = loadStoredFirebaseConfig();
       if (validateFirebaseConfig(stored)) return stored;
-      const allowLegacy = localStorage.getItem('allowLegacyFirebaseConfig') === 'true';
-      if (allowLegacy && validateFirebaseConfig(LEGACY_FIREBASE_CONFIG)) {
+      if (validateFirebaseConfig(LEGACY_FIREBASE_CONFIG)) {
         console.warn('⚠️ Usando configuración legacy de Firebase. Se recomienda cambiarla cuanto antes.');
         return LEGACY_FIREBASE_CONFIG;
       }
@@ -2899,7 +2900,7 @@
       }
     }
 
-    async function signupUser(email, password) {
+    async function signupUser(email, password, googleTTSKey = '') {
       if (!ensureFirebaseReady('crear cuenta')) {
         return { success: false, message: 'Firebase no está disponible. Usa modo invitado o intenta más tarde.', code: 'firebase/unavailable' };
       }
@@ -2916,7 +2917,14 @@
         await userDocRef.set({
           email: normalizedEmail,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          emailVerified: false
+          emailVerified: false,
+          plan: 'free',
+          googleTTSKey: googleTTSKey || null,
+          preferences: {
+            voice: 'Sasha',
+            speed: 1.0,
+            language: 'es-ES'
+          }
         });
         await ensureUserSettings(user.uid, normalizedEmail, true);
         return { success: true, message: 'Cuenta creada y sesión iniciada. Revisa tu email para verificar.', user };
@@ -3062,15 +3070,12 @@
     async function saveUserAPIKey(userId, googleTTSKey) {
       if (!isFirebaseAvailable()) return;
       const payload = {
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        googleTTSKey: googleTTSKey || null,
+        plan: 'free'
       };
-      if (googleTTSKey) {
-        payload.googleTTSKey = googleTTSKey;
-      } else {
-        payload.googleTTSKey = null;
-      }
       try {
-        await firebase.firestore().collection('userSettings').doc(userId).set(payload, { merge: true });
+        await firebase.firestore().collection('users').doc(userId).set(payload, { merge: true });
       } catch (error) {
         handleFirebaseOperationError('guardar API Key', error);
         throw error;
@@ -3080,7 +3085,7 @@
     async function getUserAPIKey(userId) {
       if (!isFirebaseAvailable()) return null;
       try {
-        const docRef = await firebase.firestore().collection('userSettings').doc(userId).get();
+        const docRef = await firebase.firestore().collection('users').doc(userId).get();
         authLog('🔎 Consultando API key guardada', { userId, exists: docRef.exists });
         if (docRef.exists) {
           const data = docRef.data();
@@ -3095,20 +3100,26 @@
 
     async function ensureUserSettings(userId, email, fromSignup = false) {
       if (!isFirebaseAvailable()) return null;
-      const settingsRef = firebase.firestore().collection('userSettings').doc(userId);
+      const settingsRef = firebase.firestore().collection('users').doc(userId);
       try {
         const doc = await settingsRef.get();
         if (doc.exists) {
-          authLog('⚙️ userSettings ya existe', { userId, fromSignup });
+          authLog('⚙️ user document ya existe', { userId, fromSignup });
           return doc.data();
         }
         const payload = {
           email: email || null,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          onboardingCompleted: false
+          onboardingCompleted: false,
+          plan: 'free',
+          preferences: {
+            voice: 'Sasha',
+            speed: 1.0,
+            language: 'es-ES'
+          }
         };
-        authLog('🛠️ Creando userSettings faltante', { userId, fromSignup });
+        authLog('🛠️ Creando documento de usuario faltante', { userId, fromSignup });
         await settingsRef.set(payload);
         return payload;
       } catch (error) {
@@ -3136,7 +3147,8 @@
         posicionReproduccion: data.posicionReproduccion || 0,
         fecha: data.updatedAt?.toDate?.()?.toISOString?.() || data.timestamp?.toDate?.()?.toISOString?.() || new Date().toISOString(),
         tipo: data.tipo || data.type || 'texto',
-        audioUrl: data.audioUrl || null
+        audioUrl: data.audioUrl || null,
+        imagen: data.imageData || null
       };
     }
 
@@ -3156,6 +3168,7 @@
           posicionReproduccion: docData.posicionReproduccion || 0,
           tipo: docData.tipo || 'texto',
           audioUrl: docData.audioUrl || docData.audio || null,
+          imageData: docData.imageData || null,
           timestamp: firebase.firestore.FieldValue.serverTimestamp(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3290,7 +3303,8 @@
         favorito: doc.favorito || false,
         posicionReproduccion: doc.posicionReproduccion || 0,
         tipo: doc.tipo || 'texto',
-        audioUrl: doc.audioUrl || null
+        audioUrl: doc.audioUrl || null,
+        imageData: doc.imagen || doc.imageData || null
       };
 
       try {
@@ -3334,6 +3348,7 @@
           const email = normalizeEmail(rawEmail);
           const password = document.getElementById('signup-password').value;
           const confirm = document.getElementById('signup-confirm').value;
+          const apiKey = document.getElementById('signup-api-key').value.trim();
           authLog('✉️ Email normalizado en signup', { rawEmail, normalizedEmail: email });
           setGuestMode(false);
           initializeFirebaseApp();
@@ -3353,8 +3368,16 @@
             return;
           }
 
+          if (apiKey) {
+            const { valid, message } = await validarAPIKey(apiKey);
+            if (!valid) {
+              showAuthErrorMessage(message || 'API Key inválida');
+              return;
+            }
+          }
+
           setButtonLoading(signupButton, true, 'Creando cuenta');
-          const { success, message, code } = await signupUser(email, password);
+          const { success, message, code } = await signupUser(email, password, apiKey);
           setButtonLoading(signupButton, false);
           if (success) {
             setGuestMode(false);
@@ -3495,7 +3518,7 @@
     const VOICE_CONFIG = {
       'Sasha': {
         nombre: 'Sasha',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=32',
         googleVoice: 'es-ES-Neural2-C',
         languageCode: 'es-ES',
@@ -3503,7 +3526,7 @@
       },
       'Selena': {
         nombre: 'Selena',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=45',
         googleVoice: 'es-ES-Neural2-A',
         languageCode: 'es-ES',
@@ -3511,7 +3534,7 @@
       },
       'Ariel': {
         nombre: 'Ariel',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=12',
         googleVoice: 'es-ES-Neural2-D',
         languageCode: 'es-ES',
@@ -3519,7 +3542,7 @@
       },
       'Alex': {
         nombre: 'Alex',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=33',
         googleVoice: 'es-ES-Neural2-B',
         languageCode: 'es-ES',
@@ -3527,7 +3550,7 @@
       },
       'Sam': {
         nombre: 'Sam',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=52',
         googleVoice: 'en-US-Neural2-D',
         languageCode: 'en-US',
@@ -3535,7 +3558,7 @@
       },
       'Robin': {
         nombre: 'Robin',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=48',
         googleVoice: 'en-GB-Neural2-C',
         languageCode: 'en-GB',
@@ -3543,7 +3566,7 @@
       },
       'Emery': {
         nombre: 'Emery',
-        desc: 'Calidad Premium • Multilingüe',
+        desc: 'Disponible para todos',
         avatar: 'https://i.pravatar.cc/150?img=47',
         googleVoice: 'en-US-Neural2-F',
         languageCode: 'en-US',
@@ -3642,7 +3665,7 @@
       }
 
       if (currentKeyInput) {
-        currentKeyInput.value = userGoogleTTSKey ? '***********' : 'Sin configurar';
+        currentKeyInput.textContent = userGoogleTTSKey ? '************' : 'Sin configurar';
       }
     }
 
@@ -3700,7 +3723,18 @@
     async function loadUserSettings(userId) {
       try {
         authLog('📥 Cargando configuración de usuario', { userId });
-        userGoogleTTSKey = await getUserAPIKey(userId);
+        const userDoc = await firebase.firestore().collection('users').doc(userId).get();
+        const data = userDoc.data() || {};
+        userGoogleTTSKey = data.googleTTSKey || await getUserAPIKey(userId);
+        const prefs = data.preferences || {};
+        if (prefs.voice) {
+          vozSeleccionada = prefs.voice;
+          document.getElementById('voz-actual').textContent = vozSeleccionada;
+        }
+        if (prefs.speed) {
+          velocidadActual = prefs.speed;
+          document.getElementById('speed-btn').textContent = `${velocidadActual.toFixed(1)} x`;
+        }
         actualizarEstadoAPIKeyUI(!!userGoogleTTSKey);
         updateApiKeySettingsUI();
         const skipAPIKey = localStorage.getItem(`skipAPIKey_${userId}`) === 'true';
@@ -3986,7 +4020,7 @@
         card.className = 'voz-card' + (voz.nombre === vozSeleccionada ? ' activa' : '');
         card.innerHTML = `
           <div class="avatar-circular"><img src="${voz.avatar}" alt="${voz.nombre}" onerror="this.src='https://placehold.co/64x64'"/></div>
-          <div class="info-voz"><h4>${voz.nombre}</h4><p>${voz.desc || 'Calidad Premium • Multilingüe'}</p><div class="onda-sonido">|||||||||||||||||||||</div></div>
+          <div class="info-voz"><h4>${voz.nombre}</h4><p>${voz.desc || 'Disponible para todos'}</p><div class="onda-sonido">|||||||||||||||||||||</div></div>
           <button class="btn-play">▶</button>
         `;
         card.querySelector('.btn-play').addEventListener('click', () => previewVoice(voz.nombre));
@@ -4933,9 +4967,10 @@
       await procesarArchivoSeleccionado(file);
     });
 
-    async function procesarImagenParaOCR(file) {
-      if (!file.type.startsWith('image/')) {
-        mostrarPopupError('Por favor selecciona un archivo de imagen válido');
+    async function procesarImagenesParaOCR(fileList) {
+      const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+      if (!files.length) {
+        mostrarPopupError('Por favor selecciona al menos una imagen válida');
         return;
       }
 
@@ -4944,7 +4979,7 @@
       progressModal.innerHTML = `
         <div class="ocr-progress-modal">
           <div class="ocr-icon">📷</div>
-          <h3>Escaneando documento...</h3>
+          <h3>Escaneando imágenes (${files.length})</h3>
           <div class="ocr-preview">
             <img id="ocr-preview-img" src="" alt="Preview" />
           </div>
@@ -4958,55 +4993,63 @@
 
       document.body.appendChild(progressModal);
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        document.getElementById('ocr-preview-img').src = event.target.result;
-      };
-      reader.readAsDataURL(file);
+      let processed = 0;
+      for (const file of files) {
+        const previewUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target.result);
+          reader.readAsDataURL(file);
+        });
+        document.getElementById('ocr-preview-img').src = previewUrl;
 
-      try {
-        const { data: { text } } = await Tesseract.recognize(
-          file,
-          'spa+eng',
-          {
-            logger: (m) => {
-              if (m.status === 'recognizing text') {
-                const percent = Math.round(m.progress * 100);
-                document.getElementById('ocr-progress-fill').style.width = `${percent}%`;
-                document.getElementById('ocr-percent').textContent = `${percent}%`;
-                document.getElementById('ocr-status').textContent = 'Reconociendo texto...';
+        try {
+          const { data: { text } } = await Tesseract.recognize(
+            file,
+            'spa+eng',
+            {
+              logger: (m) => {
+                if (m.status === 'recognizing text') {
+                  const percent = Math.round(((processed + m.progress) / files.length) * 100);
+                  document.getElementById('ocr-progress-fill').style.width = `${percent}%`;
+                  document.getElementById('ocr-percent').textContent = `${percent}%`;
+                  document.getElementById('ocr-status').textContent = `Reconociendo texto... (${processed + 1}/${files.length})`;
+                }
               }
             }
+          );
+
+          if (!text || text.trim().length < 10) {
+            throw new Error('No se detectó texto legible en la imagen');
           }
-        );
 
-        if (!text || text.trim().length < 10) {
-          throw new Error('No se detectó texto legible en la imagen');
+          const nombreDoc = `Escaneo - ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute: '2-digit' })}`;
+
+          await crearDocumentoDesdeTexto(nombreDoc, text.trim(), 'image', { imageData: previewUrl, imagePreview: previewUrl });
+          processed++;
+        } catch (error) {
+          progressModal.remove();
+          mostrarPopupError(`Error al escanear: ${error.message}`);
+          console.error(error);
+          if (imageInput) imageInput.value = '';
+          return;
         }
-
-        const nombreDoc = `Escaneo - ${new Date().toLocaleDateString('es-ES')} ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
-
-        await crearDocumentoDesdeTexto(nombreDoc, text.trim(), 'escaneo');
-
-        progressModal.remove();
-        mostrarPopupExito('✅ Documento escaneado correctamente');
-        switchPage('library');
-
-      } catch (error) {
-        progressModal.remove();
-        mostrarPopupError(`Error al escanear: ${error.message}`);
-        console.error(error);
-      } finally {
-        if (imageInput) imageInput.value = '';
       }
+
+      document.getElementById('ocr-progress-fill').style.width = '100%';
+      document.getElementById('ocr-percent').textContent = '100%';
+      document.getElementById('ocr-status').textContent = 'Escaneo completado';
+
+      progressModal.remove();
+      mostrarPopupExito('✅ Imágenes escaneadas correctamente');
+      switchPage('library');
+      if (imageInput) imageInput.value = '';
     }
 
     imageInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      await procesarImagenParaOCR(file);
+      const { files } = e.target;
+      if (!files || !files.length) return;
+      await procesarImagenesParaOCR(files);
     });
-
     function generarMiniaturaTexto(texto) {
       return new Promise((resolve) => {
         const canvas = document.createElement('canvas');
@@ -5028,12 +5071,12 @@
       });
     }
 
-    async function crearDocumentoDesdeTexto(titulo, texto, tipo) {
+    async function crearDocumentoDesdeTexto(titulo, texto, tipo, extras = {}) {
       let miniatura = 'https://placehold.co/60x60/F5F5F5/666?text=📄';
       if (tipo === 'pdf' || tipo === 'archivo' || tipo === 'docx') {
         miniatura = await generarMiniaturaTexto(texto);
-      } else if (tipo === 'escaneo') {
-        miniatura = 'https://placehold.co/60x60/F5F5F5/666?text=📷';
+      } else if (tipo === 'escaneo' || tipo === 'image') {
+        miniatura = extras.imagePreview || 'https://placehold.co/60x60/F5F5F5/666?text=📷';
       } else if (tipo === 'url') {
         miniatura = 'https://placehold.co/60x60/F5F5F5/666?text=🔗';
       }
@@ -5046,6 +5089,7 @@
         miniatura,
         vozSeleccionada,
         velocidad: velocidadActual,
+        imagen: extras.imageData || null
       };
       await guardarDocumentoUsuario(doc);
       switchPage('library');
