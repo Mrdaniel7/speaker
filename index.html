@@ -2263,7 +2263,7 @@
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    async function fetchWithTimeout(url, options = {}, timeoutMs = 10000, controller) {
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 60000, controller) {
       const abortController = controller || new AbortController();
       let timedOut = false;
       const timeoutId = setTimeout(() => {
@@ -2310,7 +2310,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-          }, 10000, controller);
+          }, 60000, controller);
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -2327,9 +2327,11 @@
           const isNetworkError = error instanceof TypeError && !isAbort;
 
           if ((isNetworkError || isTimeout) && attempt < maxRetries) {
+            attempt += 1;
+            const attemptLabel = `${attempt + 1}/${maxRetries + 1}`;
+            console.warn(`⚠️ Falló la generación de audio (intento ${attemptLabel}). Reintentando en ${backoff}ms...`, error);
             await delay(backoff);
             backoff *= 2;
-            attempt += 1;
             continue;
           }
 
@@ -2403,7 +2405,7 @@
             }
 
             if (error.name === 'TimeoutError') {
-              popupMessage = '⏳ Tiempo de espera agotado al generar audio. Intenta de nuevo.';
+              popupMessage = '⏳ Tiempo de espera agotado al generar audio tras varios intentos. Intenta de nuevo.';
               if (!silenciarErrores) {
                 mostrarPopupError(popupMessage);
               }
@@ -3752,18 +3754,18 @@
       },
       {
         id: 'alex',
-        nombre: 'Alex',
+        nombre: 'Alexandra',
         desc: 'Español europeo • tono balanceado',
-        gender: 'masculino',
+        gender: 'femenino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-D',
         avatar: 'https://i.pravatar.cc/256?img=12'
       },
       {
         id: 'lucia',
-        nombre: 'Lucia',
+        nombre: 'Daniel',
         desc: 'Español europeo • tono profesional',
-        gender: 'femenino',
+        gender: 'masculino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-F',
         avatar: 'https://i.pravatar.cc/256?img=68'
@@ -3788,9 +3790,9 @@
       },
       {
         id: 'diego',
-        nombre: 'Diego',
+        nombre: 'Diana',
         desc: 'Español latino • tono dinámico',
-        gender: 'masculino',
+        gender: 'femenino',
         languageCode: 'es-US',
         googleVoice: 'es-US-Neural2-B',
         avatar: 'https://i.pravatar.cc/256?img=49'
@@ -3806,9 +3808,9 @@
       },
       {
         id: 'miguel',
-        nombre: 'Miguel',
+        nombre: 'María',
         desc: 'Español europeo • tono maduro',
-        gender: 'masculino',
+        gender: 'femenino',
         languageCode: 'es-ES',
         googleVoice: 'es-ES-Neural2-C',
         avatar: 'https://i.pravatar.cc/256?img=34'
@@ -4836,7 +4838,7 @@
       playPauseBtn.classList.toggle('loading', isLoading);
 
       if (isLoading) {
-        playPauseBtn.innerHTML = '<span class="inline-spinner" aria-hidden="true"></span> <span>⏳ Generando audio...</span>';
+        playPauseBtn.innerHTML = '<span class="inline-spinner" aria-hidden="true"></span> <span>⏳ Generando audio, por favor espera...</span>';
       } else {
         refreshPlayButtonLabel();
       }
