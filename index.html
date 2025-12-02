@@ -1118,7 +1118,6 @@
   </div>
 
   <script type="module">
-    const DEFAULT_API_KEY = 'AIzaSyC7zk08wM1t1UCTkzzfdVO2RZ_Z4OnhDSg';
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
 
     const logDebug = (...args) => {
@@ -2105,7 +2104,7 @@
       const toggleBtn = document.getElementById('toggle-visibility');
       const errorMsg = document.getElementById('api-error');
 
-      input.value = storedKey || DEFAULT_API_KEY || '';
+      input.value = storedKey || '';
 
       let isVisible = false;
       toggleBtn.addEventListener('click', () => {
@@ -2185,7 +2184,7 @@
     async function inicializarAPIKey() {
       const skipAPIKey = localStorage.getItem('skipAPIKey') === 'true';
       const storedKey = getStoredApiKey();
-      const candidateKey = storedKey || DEFAULT_API_KEY;
+      const candidateKey = storedKey;
 
       if (skipAPIKey && !storedKey) {
         logDebug('API Key omitida por preferencia del usuario');
