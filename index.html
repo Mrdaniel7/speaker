@@ -1214,6 +1214,11 @@
               <span data-i18n="settings.googleApi">API Key de Google TTS</span>
               <span class="valor-actual" id="api-status-label">Sin configurar</span>
             </div>
+            <div class="config-item" data-action="config-hf">
+              <div class="icono-config">🧠</div>
+              <span data-i18n="settings.hfToken">Token de Hugging Face</span>
+              <span class="valor-actual" id="hf-status-label">Sin configurar</span>
+            </div>
             <div class="config-item" data-action="config-firebase">
               <div class="icono-config">☁️</div>
               <span data-i18n="settings.firebaseProject">Proyecto Firebase</span>
@@ -1238,6 +1243,14 @@
               <div style="display:flex; flex-direction:column; gap:4px;">
                 <label style="font-weight:600;" data-i18n="settings.googleApi.label">Google TTS API Key:</label>
                 <span id="current-api-key" style="font-weight:700; color:#1A1A1A;">Sin configurar</span>
+              </div>
+              <button class="btn-primario" style="margin-left:auto;" onclick="editAPIKey()" data-i18n="settings.change">Cambiar</button>
+            </div>
+            <div class="config-item">
+              <div class="icono-config">🧠</div>
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <label style="font-weight:600;" data-i18n="settings.hfToken.label">Hugging Face Token:</label>
+                <span id="current-hf-token" style="font-weight:700; color:#1A1A1A;">Sin configurar</span>
               </div>
               <button class="btn-primario" style="margin-left:auto;" onclick="editAPIKey()" data-i18n="settings.change">Cambiar</button>
             </div>
@@ -1507,6 +1520,8 @@
       <p style="margin-top:0; color:#555;">Para usar las voces de Google Text-to-Speech, necesitas configurar tu propia API key.</p>
       <label for="google-tts-api-key-input" style="display:block; font-weight:600; margin-top:12px;">API Key de Google TTS:</label>
       <input type="text" id="google-tts-api-key-input" placeholder="AIzaSy..." style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;">
+      <label for="huggingface-token-input" style="display:block; font-weight:600; margin-top:12px;">Hugging Face Token:</label>
+      <input type="text" id="huggingface-token-input" placeholder="hf_xxx" style="width:100%; padding:10px 12px; margin-top:6px; border-radius:10px; border:1px solid #ddd;">
       <a href="https://cloud.google.com/text-to-speech/docs/before-you-begin" target="_blank" style="display:inline-block; margin:10px 0; color:#1a73e8;">¿Cómo obtener una API key?</a>
       <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px; align-items:center;">
         <div id="api-key-inline-loader" style="display:none; align-items:center; gap:6px; color:#FF9500; font-weight:700;">
@@ -1521,6 +1536,7 @@
 
   <script type="module">
     let userGoogleTTSKey = null;
+    let huggingFaceToken = null;
     const apiKeySetupModal = document.getElementById('api-key-setup-modal');
     if (apiKeySetupModal) {
       apiKeySetupModal.style.display = 'none';
@@ -1529,6 +1545,7 @@
     const FIREBASE_CONFIG_STORAGE_KEY = 'listen_ai_firebase_config_v1';
     const GUEST_MODE_KEY = 'isGuestMode';
     const GUEST_API_KEY_STORAGE_KEY = 'googleTTSKey_guest';
+    const HF_TOKEN_STORAGE_KEY = 'hfToken_guest';
     const GUEST_SKIP_API_KEY_KEY = 'skipAPIKey_guest';
     const SHARE_APP_URL = 'https://mrdaniel7.github.io/speaker/';
 
@@ -1603,6 +1620,20 @@
         localStorage.removeItem(GUEST_API_KEY_STORAGE_KEY);
       }
     }
+
+    function getGuestHFToken() {
+      return localStorage.getItem(HF_TOKEN_STORAGE_KEY) || null;
+    }
+
+    function setGuestHFToken(token) {
+      if (token) {
+        localStorage.setItem(HF_TOKEN_STORAGE_KEY, token);
+      } else {
+        localStorage.removeItem(HF_TOKEN_STORAGE_KEY);
+      }
+    }
+
+    huggingFaceToken = getGuestHFToken();
 
     function getActiveFirebaseConfig() {
       const stored = loadStoredFirebaseConfig();
@@ -1781,6 +1812,8 @@
         'settings.voiceCloning': 'Clonación de Voz',
         'settings.googleApi': 'API Key de Google TTS',
         'settings.googleApi.label': 'Google TTS API Key:',
+        'settings.hfToken': 'Token de Hugging Face',
+        'settings.hfToken.label': 'Hugging Face Token:',
         'settings.googleApi.status.required': '⚠️ API Key requerida',
         'settings.googleApi.status.configured': 'Configurada',
         'settings.googleApi.status.unconfigured': 'Sin configurar',
@@ -1843,6 +1876,8 @@
         'settings.voiceCloning': 'Voice Cloning',
         'settings.googleApi': 'Google TTS API Key',
         'settings.googleApi.label': 'Google TTS API Key:',
+        'settings.hfToken': 'Hugging Face Token',
+        'settings.hfToken.label': 'Hugging Face Token:',
         'settings.googleApi.status.required': '⚠️ API Key required',
         'settings.googleApi.status.configured': 'Configured',
         'settings.googleApi.status.unconfigured': 'Not configured',
@@ -1905,6 +1940,8 @@
         'settings.voiceCloning': 'Clonagem de Voz',
         'settings.googleApi': 'Chave da API Google TTS',
         'settings.googleApi.label': 'Chave da API Google TTS:',
+        'settings.hfToken': 'Token da Hugging Face',
+        'settings.hfToken.label': 'Token da Hugging Face:',
         'settings.googleApi.status.required': '⚠️ Chave de API necessária',
         'settings.googleApi.status.configured': 'Configurada',
         'settings.googleApi.status.unconfigured': 'Não configurada',
@@ -1953,6 +1990,8 @@
         'settings.voiceCloning': 'Clonage de voix',
         'settings.googleApi': 'Clé API Google TTS',
         'settings.googleApi.label': 'Clé API Google TTS :',
+        'settings.hfToken': 'Jeton Hugging Face',
+        'settings.hfToken.label': 'Jeton Hugging Face :',
         'settings.googleApi.status.required': '⚠️ Clé API requise',
         'settings.googleApi.status.configured': 'Configurée',
         'settings.googleApi.status.unconfigured': 'Non configurée',
@@ -2264,6 +2303,9 @@
       const googleApiLabel = document.querySelector('[data-action="config-api"] [data-i18n="settings.googleApi"]');
       if (googleApiLabel) googleApiLabel.textContent = t('settings.googleApi');
 
+      const hfTokenLabel = document.querySelector('[data-action="config-hf"] [data-i18n="settings.hfToken"]');
+      if (hfTokenLabel) hfTokenLabel.textContent = t('settings.hfToken');
+
       const firebaseLabel = document.querySelector('[data-action="config-firebase"] [data-i18n="settings.firebaseProject"]');
       if (firebaseLabel) firebaseLabel.textContent = t('settings.firebaseProject');
 
@@ -2281,6 +2323,9 @@
 
       const apiLabel = document.querySelector('[data-i18n="settings.googleApi.label"]');
       if (apiLabel) apiLabel.textContent = t('settings.googleApi.label');
+
+      const hfTokenLabelField = document.querySelector('[data-i18n="settings.hfToken.label"]');
+      if (hfTokenLabelField) hfTokenLabelField.textContent = t('settings.hfToken.label');
 
       const apiChangeBtn = document.querySelector('#api-key-settings [data-i18n="settings.change"]');
       if (apiChangeBtn) apiChangeBtn.textContent = t('settings.change');
@@ -2473,6 +2518,49 @@
       return [primerChunk, ...chunksRestantes];
     }
 
+    function dividirTextoPorCaracteres(texto, maxChars = 500) {
+      const limpio = (texto || '').trim();
+      if (limpio.length <= maxChars) return limpio ? [limpio] : [];
+
+      const oraciones = limpio.split(/(?<=[\.\?\!])/);
+      const chunks = [];
+      let buffer = '';
+
+      for (const oracion of oraciones) {
+        const segmento = oracion.trim();
+        if (!segmento) continue;
+
+        if ((buffer + ' ' + segmento).trim().length <= maxChars) {
+          buffer = buffer ? `${buffer} ${segmento}` : segmento;
+          continue;
+        }
+
+        if (buffer) {
+          chunks.push(buffer.trim());
+        }
+
+        if (segmento.length <= maxChars) {
+          buffer = segmento;
+        } else {
+          const palabras = segmento.split(/\s+/);
+          let actual = '';
+          for (const palabra of palabras) {
+            if ((actual + ' ' + palabra).trim().length > maxChars) {
+              if (actual) chunks.push(actual.trim());
+              actual = palabra;
+            } else {
+              actual = actual ? `${actual} ${palabra}` : palabra;
+            }
+          }
+          if (actual) chunks.push(actual.trim());
+          buffer = '';
+        }
+      }
+
+      if (buffer) chunks.push(buffer.trim());
+      return chunks;
+    }
+
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -2498,6 +2586,68 @@
         }
         throw error;
       }
+    }
+
+    async function generateXTTSAudio(text, speakerWav, hfToken, language = 'es', controller) {
+      if (!hfToken) throw new Error('Falta el token de Hugging Face');
+
+      const cleanSpeaker = (speakerWav || '').includes(',') ? speakerWav.split(',')[1] : speakerWav;
+      const cacheKey = `${(language || 'es').slice(0, 2)}:${cleanSpeaker?.slice?.(0, 16) || 'voice'}:${text}`;
+
+      if (xttsAudioCache.has(cacheKey)) {
+        return xttsAudioCache.get(cacheKey);
+      }
+
+      const payload = {
+        text,
+        speaker_wav: cleanSpeaker,
+        language: (language || 'es').slice(0, 2)
+      };
+
+      const response = await fetchWithTimeout(
+        'https://api-inference.huggingface.co/models/coqui/XTTS-v2',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${hfToken}`
+          },
+          body: JSON.stringify(payload)
+        },
+        120000,
+        controller
+      );
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!response.ok) {
+        if (contentType.includes('application/json')) {
+          const errorJson = await response.json().catch(() => ({}));
+          throw new Error(errorJson?.error || errorJson?.message || `HTTP ${response.status}`);
+        }
+        const errorText = await response.text().catch(() => '');
+        throw new Error(errorText || `HTTP ${response.status}`);
+      }
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || data?.message || 'Respuesta inválida del modelo XTTS');
+      }
+
+      let blob = null;
+      if (contentType.includes('audio')) {
+        const buffer = await response.arrayBuffer();
+        blob = new Blob([buffer], { type: 'audio/mp3' });
+      } else {
+        const textResponse = await response.text();
+        const cleaned = textResponse?.trim?.() || '';
+        if (!cleaned) throw new Error('Respuesta vacía del modelo XTTS');
+        const normalized = cleaned.includes(',') ? cleaned.split(',').pop() : cleaned;
+        blob = base64ToBlob(normalized, 'audio/mp3');
+      }
+
+      xttsAudioCache.set(cacheKey, blob);
+      return blob;
     }
 
     async function generateGoogleTTS(text, voiceName, apiKey, speakingRate = 1.0, controller) {
@@ -2574,12 +2724,24 @@
       audioChunkUrls = [];
     }
 
-    async function generarAudioChunk(index, vozConfig, apiKey, velocidad, controller) {
+    async function generarAudioChunk(index, vozConfig, apiKey, velocidad, controller, ttsOptions = {}) {
       let attempts = 0;
       const maxRetries = 2;
+      const provider = ttsOptions.provider || 'google';
       while (attempts <= maxRetries) {
         try {
-          const blob = await generateGoogleTTS(chunkTexts[index], vozConfig.googleVoice, apiKey, velocidad, controller);
+          const chunkText = chunkTexts[index];
+          if (!chunkText) throw new Error('Texto de chunk no disponible');
+
+          const blob = provider === 'xtts'
+            ? await generateXTTSAudio(
+              chunkText,
+              ttsOptions.speakerWav || vozConfig?.audioBase64,
+              ttsOptions.hfToken,
+              ttsOptions.language || vozConfig?.languageCode || 'es',
+              controller
+            )
+            : await generateGoogleTTS(chunkText, vozConfig.googleVoice, apiKey, velocidad, controller);
           const url = URL.createObjectURL(blob);
           audioChunkUrls.push(url);
           return url;
@@ -2606,7 +2768,7 @@
       return playbackElapsedBase + (audio?.currentTime || 0);
     }
 
-    async function precargarSiguienteChunk(apiKey, vozConfig, velocidad, controller) {
+    async function precargarSiguienteChunk(apiKey, vozConfig, velocidad, controller, ttsOptions = {}) {
       if (isLoadingNextChunk) return;
       if (currentChunkIndex >= chunkTexts.length - 1) return;
 
@@ -2614,7 +2776,7 @@
       const nextIndex = currentChunkIndex + 1;
 
       try {
-        const nextUrl = await generarAudioChunk(nextIndex, vozConfig, apiKey, velocidad, controller);
+        const nextUrl = await generarAudioChunk(nextIndex, vozConfig, apiKey, velocidad, controller, ttsOptions);
         audioQueue.push(nextUrl);
         console.log(`⏭️ Chunk ${nextIndex + 1}/${chunkTexts.length} precargado`);
       } catch (error) {
@@ -2625,12 +2787,12 @@
       }
     }
 
-    function handleChunkTimeUpdate(audio, totalPalabras, vozConfig, apiKey, velocidad) {
+    function handleChunkTimeUpdate(audio, totalPalabras, vozConfig, apiKey, velocidad, ttsOptions = {}) {
       if (!audio || !chunkTexts.length || !palabraElements.length) return;
       const currentDuration = chunkDurations[currentChunkIndex] || audio.duration || estimatedChunkDurations[currentChunkIndex] || 1;
       const tiempoRestante = Math.max(0, currentDuration - audio.currentTime);
       if (tiempoRestante < 3) {
-        precargarSiguienteChunk(apiKey, vozConfig, velocidad, currentTTSAbortController);
+        precargarSiguienteChunk(apiKey, vozConfig, velocidad, currentTTSAbortController, ttsOptions);
       }
 
       const progresoGlobal = calcularProgresoGlobal(audio);
@@ -2698,6 +2860,7 @@
 
       const isClonedVoice = vozConfig?.isCloned === true;
       const hasClonedAudio = !!vozConfig?.audioBase64;
+      const textoLimpio = (texto ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
 
       if (isClonedVoice) {
         console.log('🎙️ Voz clonada detectada:', vozConfig.nombre);
@@ -2711,24 +2874,157 @@
           return null;
         }
 
+        const hfToken = getStoredHFToken();
+
+        if (!hfToken) {
+          const errorMsg = 'Configura tu token de Hugging Face para usar tu voz clonada.';
+          console.error('❌ Falta token de Hugging Face');
+          if (!silenciarErrores) {
+            mostrarPopupError(errorMsg);
+            setTimeout(() => mostrarApiKeySetupModal(), 500);
+          }
+          return null;
+        }
+
+        const clonedChunks = dividirTextoPorCaracteres(textoLimpio, 500);
+
+        if (!clonedChunks.length) {
+          if (!silenciarErrores) mostrarPopupError('No hay texto para reproducir.');
+          return null;
+        }
+
+        const clonedTTSOptions = {
+          provider: 'xtts',
+          hfToken,
+          speakerWav: vozConfig.audioBase64,
+          language: vozConfig.languageCode || 'es'
+        };
+
         try {
-          const blob = dataUrlToBlob(vozConfig.audioBase64, vozConfig.audioContentType || 'audio/wav');
-          if (!blob) throw new Error('No se pudo reconstruir el audio de la voz clonada');
-          const audioUrl = URL.createObjectURL(blob);
-          const audio = new Audio(audioUrl);
-          audio.loop = true;
+          if (isPreview) {
+            const previewBuffers = [];
+            const previewChunks = clonedChunks.slice(0, 1);
+            for (const parte of previewChunks) {
+              const blob = await generateXTTSAudio(
+                parte,
+                clonedTTSOptions.speakerWav,
+                clonedTTSOptions.hfToken,
+                clonedTTSOptions.language,
+                currentTTSAbortController
+              );
+              previewBuffers.push(blob);
+            }
+            const audioBlob = new Blob(previewBuffers, { type: 'audio/mp3' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.playbackRate = velocidad;
+            audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+            setVoiceSystem('browser', vozConfig?.nombre || vozNombre);
+            return audio;
+          }
+
+          resetChunkingState();
+          chunkTexts = clonedChunks;
+          chunkWordCounts = clonedChunks.map((chunk) => chunk.trim().split(/\s+/).filter(Boolean).length);
+          estimatedChunkDurations = calcularDuracionEstimadasPorChunk(velocidad);
+          chunkDurations = Array(clonedChunks.length).fill(0);
+
+          const calcularInicio = (segundosInicio) => {
+            let acumulado = 0;
+            let indiceInicio = 0;
+            let offset = 0;
+            estimatedChunkDurations.forEach((duracion, idx) => {
+              if (acumulado + duracion <= segundosInicio) {
+                acumulado += duracion;
+                indiceInicio = idx + 1;
+              }
+            });
+            if (indiceInicio >= chunkTexts.length) {
+              indiceInicio = chunkTexts.length - 1;
+              acumulado = estimatedChunkDurations.slice(0, indiceInicio).reduce((acc, val) => acc + val, 0);
+            }
+            offset = Math.max(0, segundosInicio - acumulado);
+            return { indiceInicio, offset, acumulado };
+          };
+
+          const { indiceInicio, offset, acumulado } = calcularInicio(startFrom);
+          currentChunkIndex = indiceInicio;
+          playbackElapsedBase = acumulado;
+
+          console.log('🎙️ Generando audio con Hugging Face XTTS');
+          toggleLoader(true, 'Generando voz clonada', 'Preparando tu audio...');
+          const initialUrl = await generarAudioChunk(
+            indiceInicio,
+            vozConfig,
+            null,
+            velocidad,
+            currentTTSAbortController,
+            clonedTTSOptions
+          );
+          toggleLoader(false);
+          const audio = new Audio(initialUrl);
           audio.playbackRate = velocidad;
-          audio.addEventListener('pause', () => URL.revokeObjectURL(audioUrl), { once: true });
-          audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+
+          audio.addEventListener('loadedmetadata', () => {
+            chunkDurations[indiceInicio] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+            if (offset) {
+              audio.currentTime = Math.min(offset, audio.duration - 0.25);
+            }
+            timeEnd.textContent = formatTime(calcularDuracionTotal());
+          }, { once: true });
+
+          audio.addEventListener('timeupdate', () => handleChunkTimeUpdate(audio, palabraElements.length, vozConfig, null, velocidad, clonedTTSOptions));
+
+          audio.addEventListener('ended', async () => {
+            const currentDuration = chunkDurations[currentChunkIndex] || audio.duration || estimatedChunkDurations[currentChunkIndex] || 0;
+            playbackElapsedBase += currentDuration;
+            if (audioQueue.length > 0) {
+              const nextAudio = audioQueue.shift();
+              currentChunkIndex += 1;
+              audio.src = nextAudio;
+              audio.addEventListener('loadedmetadata', () => {
+                chunkDurations[currentChunkIndex] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+                timeEnd.textContent = formatTime(calcularDuracionTotal());
+              }, { once: true });
+              audio.play().catch((err) => console.error(err));
+            } else if (currentChunkIndex < chunkTexts.length - 1) {
+              try {
+                await precargarSiguienteChunk(null, vozConfig, velocidad, currentTTSAbortController, clonedTTSOptions);
+                if (audioQueue.length) {
+                  const siguiente = audioQueue.shift();
+                  currentChunkIndex += 1;
+                  audio.src = siguiente;
+                  audio.addEventListener('loadedmetadata', () => {
+                    chunkDurations[currentChunkIndex] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+                    timeEnd.textContent = formatTime(calcularDuracionTotal());
+                  }, { once: true });
+                  audio.play().catch((err) => console.error(err));
+                } else {
+                  mostrarPopupError('No pudimos cargar el siguiente fragmento.');
+                  detenerLectura();
+                }
+              } catch (error) {
+                console.error('Error al recuperar chunk faltante', error);
+                mostrarPopupError('No pudimos recuperar el siguiente fragmento.');
+                detenerLectura();
+              }
+            } else {
+              detenerLectura();
+            }
+          });
+
+          precargarSiguienteChunk(null, vozConfig, velocidad, currentTTSAbortController, clonedTTSOptions);
           setVoiceSystem('browser', vozConfig?.nombre || vozNombre);
-          console.log('🔊 Reproduciendo audio clonado desde blob local');
+          if (preloadOnly) return audio;
           return audio;
         } catch (error) {
           console.error('❌ Error usando la voz clonada local', error);
           if (!silenciarErrores) {
-            mostrarPopupError('No se pudo usar tu voz clonada. Vuelve a grabarla o súbela de nuevo.');
+            mostrarPopupError('No se pudo usar tu voz clonada. Revisa tu token de Hugging Face e inténtalo de nuevo.');
           }
           return null;
+        } finally {
+          toggleLoader(false);
         }
       }
 
@@ -2752,7 +3048,6 @@
       }
 
       try {
-        const textoLimpio = (texto ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
         const chunks = prepararChunksPorTamanio(textoLimpio);
 
         if (!chunks.length) {
@@ -3275,6 +3570,7 @@
     let pendingVoiceAudio = null;
     let audioPreview = null;
     let repeatPlayback = false;
+    const xttsAudioCache = new Map();
 
     const getTextConfigKey = () => `textConfig_${currentUser?.uid || 'guest'}`;
 
@@ -3710,8 +4006,10 @@
       await clearLocalDocumentos();
       documentos = [];
       userGoogleTTSKey = null;
+      huggingFaceToken = getGuestHFToken();
       setVoiceSystem('browser');
       updateApiKeySettingsUI();
+      actualizarEstadoHFTokenUI();
       renderDocumentos();
       showLoginScreen();
     }
@@ -3754,6 +4052,21 @@
       }
     }
 
+    async function saveUserHFToken(userId, hfToken) {
+      if (!isFirebaseAvailable()) return;
+      const payload = {
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        hfToken: hfToken || null
+      };
+
+      try {
+        await firebase.firestore().collection('users').doc(userId).set(payload, { merge: true });
+      } catch (error) {
+        handleFirebaseOperationError('guardar token de Hugging Face', error);
+        throw error;
+      }
+    }
+
     async function getUserAPIKey(userId) {
       if (!isFirebaseAvailable()) return null;
       try {
@@ -3766,6 +4079,22 @@
         return null;
       } catch (error) {
         handleFirebaseOperationError('leer API Key', error);
+        return null;
+      }
+    }
+
+    async function getUserHFToken(userId) {
+      if (!isFirebaseAvailable()) return null;
+      try {
+        const docRef = await firebase.firestore().collection('users').doc(userId).get();
+        authLog('🔎 Consultando token de Hugging Face guardado', { userId, exists: docRef.exists });
+        if (docRef.exists) {
+          const data = docRef.data();
+          return data?.hfToken || data?.huggingFaceToken || null;
+        }
+        return null;
+      } catch (error) {
+        handleFirebaseOperationError('leer token de Hugging Face', error);
         return null;
       }
     }
@@ -4435,6 +4764,7 @@
     }
 
     const getStoredApiKey = () => userGoogleTTSKey;
+    const getStoredHFToken = () => huggingFaceToken;
     const hasAPIKeySkipPreference = () => {
       const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser?.uid}` : GUEST_SKIP_API_KEY_KEY;
       return localStorage.getItem(skipKey) === 'true';
@@ -4454,6 +4784,17 @@
       userGoogleTTSKey = key;
       setVoiceSystem(key ? 'google' : 'browser');
       window.dispatchEvent(new Event('apiKeyUpdated'));
+    };
+
+    const setStoredHFToken = async (token) => {
+      const normalizedToken = token || null;
+      if (!isGuestMode && currentUser?.uid && isFirebaseAvailable()) {
+        await saveUserHFToken(currentUser.uid, normalizedToken);
+      } else {
+        setGuestHFToken(normalizedToken);
+      }
+      huggingFaceToken = normalizedToken;
+      window.dispatchEvent(new Event('hfTokenUpdated'));
     };
 
     async function verificarYMostrarPopupAPIKey() {
@@ -4564,6 +4905,24 @@
       updateApiKeySettingsUI();
     }
 
+    function actualizarEstadoHFTokenUI(hasToken = !!getStoredHFToken()) {
+      const hfLabel = document.getElementById('hf-status-label');
+      const currentToken = document.getElementById('current-hf-token');
+
+      if (hfLabel) {
+        hfLabel.textContent = hasToken
+          ? t('settings.googleApi.status.configured')
+          : t('settings.googleApi.status.required');
+        hfLabel.style.color = hasToken ? '#1A1A1A' : '#FF3B30';
+      }
+
+      if (currentToken) {
+        currentToken.textContent = hasToken
+          ? '************'
+          : t('settings.googleApi.status.unconfigured');
+      }
+    }
+
     function updateApiKeySettingsUI() {
       const apiKeySettings = document.getElementById('api-key-settings');
       const currentKeyInput = document.getElementById('current-api-key');
@@ -4575,6 +4934,8 @@
       if (currentKeyInput) {
         currentKeyInput.textContent = userGoogleTTSKey ? '************' : t('settings.googleApi.status.unconfigured');
       }
+
+      actualizarEstadoHFTokenUI();
     }
 
     function mostrarApiKeySetupModal() {
@@ -4582,6 +4943,8 @@
       if (!modal) return;
       const input = document.getElementById('google-tts-api-key-input');
       if (input) input.value = userGoogleTTSKey || '';
+      const hfInput = document.getElementById('huggingface-token-input');
+      if (hfInput) hfInput.value = huggingFaceToken || '';
       modal.style.display = 'flex';
       toggleOverlay(true);
     }
@@ -4589,7 +4952,7 @@
     function cerrarApiKeySetupModal(force = false) {
       const modal = document.getElementById('api-key-setup-modal');
       if (!modal) return;
-      if (!force && !getStoredApiKey() && !hasAPIKeySkipPreference()) {
+      if (!force && !getStoredApiKey() && !getStoredHFToken() && !hasAPIKeySkipPreference()) {
         mostrarPopupError('⚠️ Configura una API Key o selecciona "Omitir" para usar voces sintéticas');
         toggleOverlay(true);
         modal.style.display = 'flex';
@@ -4632,31 +4995,38 @@
 
     async function saveAPIKey() {
       const input = document.getElementById('google-tts-api-key-input');
+      const hfInput = document.getElementById('huggingface-token-input');
       const apiKey = input?.value.trim();
+      const hfToken = hfInput?.value.trim();
 
-      if (!apiKey) {
-        mostrarPopupError('Ingresa una API key válida.');
+      if (!apiKey && !hfToken) {
+        mostrarPopupError('Ingresa una API key de Google o un token de Hugging Face.');
         return;
       }
 
       toggleApiKeyValidationLoading(true);
-      let validationResult = { valid: false, message: '' };
+      let validationResult = { valid: true, message: '' };
 
       try {
-        validationResult = await validarAPIKey(apiKey);
+        if (apiKey) {
+          validationResult = await validarAPIKey(apiKey);
+        }
       } finally {
         toggleApiKeyValidationLoading(false);
       }
 
-      if (!validationResult.valid) {
+      if (apiKey && !validationResult.valid) {
         mostrarPopupError(validationResult.message || 'API Key inválida o sin permisos.');
         return;
       }
-      await setStoredApiKey(apiKey);
-      actualizarEstadoAPIKeyUI(true);
+
+      await setStoredApiKey(apiKey || null);
+      await setStoredHFToken(hfToken || null);
+      actualizarEstadoAPIKeyUI(!!apiKey);
+      actualizarEstadoHFTokenUI(!!hfToken);
       updateApiKeySettingsUI();
       cerrarApiKeySetupModal();
-      mostrarPopupExito(isGuestMode ? '✅ API Key guardada localmente' : '✅ API Key guardada en tu cuenta');
+      mostrarPopupExito('✅ Configuración de tokens guardada');
     }
 
     function editAPIKey() {
@@ -4767,6 +5137,7 @@
         const userDoc = await firebase.firestore().collection('users').doc(userId).get();
         const data = userDoc.data() || {};
         userGoogleTTSKey = data.googleTTSKey || await getUserAPIKey(userId);
+        huggingFaceToken = data.hfToken || data.huggingFaceToken || await getUserHFToken(userId) || getGuestHFToken();
         setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser');
         const prefs = data.preferences || {};
         if (data.clonedVoice?.audioBase64 || data.clonedVoice?.audioDataUrl || data.clonedVoice?.audio) {
@@ -4782,6 +5153,7 @@
           document.getElementById('speed-btn').textContent = `${velocidadActual.toFixed(1)} x`;
         }
         actualizarEstadoAPIKeyUI(!!userGoogleTTSKey);
+        actualizarEstadoHFTokenUI(!!huggingFaceToken);
         updateApiKeySettingsUI();
         const skipAPIKey = localStorage.getItem(`skipAPIKey_${userId}`) === 'true';
         if (!userGoogleTTSKey && !skipAPIKey) {
@@ -6413,6 +6785,7 @@
 
         actualizarEstadoAPIKeyUI(!!getStoredApiKey());
         window.addEventListener('apiKeyUpdated', () => actualizarEstadoAPIKeyUI(true));
+        window.addEventListener('hfTokenUpdated', () => actualizarEstadoHFTokenUI(true));
       }
 
       const cancelApiKeyBtn = document.getElementById('cancel-api-key-setup');
@@ -6429,6 +6802,12 @@
           el.addEventListener('click', () => {
             const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser.uid}` : 'skipAPIKey_guest';
             localStorage.setItem(skipKey, 'false');
+            mostrarApiKeySetupModal();
+          });
+        });
+
+        document.querySelectorAll('[data-action="config-hf"]').forEach((el) => {
+          el.addEventListener('click', () => {
             mostrarApiKeySetupModal();
           });
         });
