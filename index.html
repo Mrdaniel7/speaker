@@ -2259,6 +2259,26 @@
       return chunks;
     }
 
+    function dividirTextoEnChunks(texto, palabrasPorChunk) {
+      const palabras = texto.split(/\s+/);
+      const chunks = [];
+      for (let i = 0; i < palabras.length; i += palabrasPorChunk) {
+        chunks.push(palabras.slice(i, i + palabrasPorChunk).join(' '));
+      }
+      return chunks;
+    }
+
+    function prepararChunksPorTamanio(textoLimpio) {
+      const palabras = textoLimpio.split(/\s+/).filter(Boolean);
+      if (palabras.length <= 300) {
+        return [textoLimpio];
+      }
+      const primerChunk = palabras.slice(0, 100).join(' ');
+      const restantes = palabras.slice(100).join(' ');
+      const chunksRestantes = dividirTextoEnChunks(restantes, 200);
+      return [primerChunk, ...chunksRestantes];
+    }
+
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -2340,8 +2360,132 @@
       }
     }
 
+    function resetChunkingState() {
+      audioQueue = [];
+      chunkDurations = [];
+      chunkWordCounts = [];
+      chunkTexts = [];
+      estimatedChunkDurations = [];
+      currentChunkIndex = 0;
+      playbackElapsedBase = 0;
+      isLoadingNextChunk = false;
+    }
+
+    function revokeChunkUrls() {
+      if (audioChunkUrls.length) {
+        audioChunkUrls.forEach((url) => {
+          try { URL.revokeObjectURL(url); } catch (e) { console.warn('No se pudo revocar URL', e); }
+        });
+      }
+      audioChunkUrls = [];
+    }
+
+    async function generarAudioChunk(index, vozConfig, apiKey, velocidad, controller) {
+      let attempts = 0;
+      const maxRetries = 2;
+      while (attempts <= maxRetries) {
+        try {
+          const blob = await generateGoogleTTS(chunkTexts[index], vozConfig.googleVoice, apiKey, velocidad, controller);
+          const url = URL.createObjectURL(blob);
+          audioChunkUrls.push(url);
+          return url;
+        } catch (error) {
+          attempts += 1;
+          if (attempts > maxRetries) throw error;
+          console.warn(`⚠️ Falló chunk ${index + 1}, reintento ${attempts}/${maxRetries}`, error);
+          await delay(400 * attempts);
+        }
+      }
+    }
+
+    function calcularDuracionEstimadasPorChunk(velocidad) {
+      return chunkWordCounts.map((count) => count / (2.5 * velocidad));
+    }
+
+    function calcularDuracionTotal() {
+      const known = chunkDurations.reduce((acc, cur) => acc + (cur || 0), 0);
+      const estimates = estimatedChunkDurations.reduce((acc, cur, idx) => acc + (chunkDurations[idx] ? 0 : cur), 0);
+      return known + estimates;
+    }
+
+    function getGlobalPlaybackTime(audio) {
+      return playbackElapsedBase + (audio?.currentTime || 0);
+    }
+
+    async function precargarSiguienteChunk(apiKey, vozConfig, velocidad, controller) {
+      if (isLoadingNextChunk) return;
+      if (currentChunkIndex >= chunkTexts.length - 1) return;
+
+      isLoadingNextChunk = true;
+      const nextIndex = currentChunkIndex + 1;
+
+      try {
+        const nextUrl = await generarAudioChunk(nextIndex, vozConfig, apiKey, velocidad, controller);
+        audioQueue.push(nextUrl);
+        console.log(`⏭️ Chunk ${nextIndex + 1}/${chunkTexts.length} precargado`);
+      } catch (error) {
+        console.error('❌ Error precargando chunk:', error);
+        mostrarPopupError('No se pudo cargar el siguiente fragmento de audio.');
+      } finally {
+        isLoadingNextChunk = false;
+      }
+    }
+
+    function handleChunkTimeUpdate(audio, totalPalabras, vozConfig, apiKey, velocidad) {
+      if (!audio || !chunkTexts.length || !palabraElements.length) return;
+      const currentDuration = chunkDurations[currentChunkIndex] || audio.duration || estimatedChunkDurations[currentChunkIndex] || 1;
+      const tiempoRestante = Math.max(0, currentDuration - audio.currentTime);
+      if (tiempoRestante < 3) {
+        precargarSiguienteChunk(apiKey, vozConfig, velocidad, currentTTSAbortController);
+      }
+
+      const progresoGlobal = calcularProgresoGlobal(audio);
+      progress.style.width = `${progresoGlobal * 100}%`;
+      progressThumb.style.left = `${progresoGlobal * 100}%`;
+
+      const currentTimeGlobal = getGlobalPlaybackTime(audio);
+      timeStart.textContent = formatTime(currentTimeGlobal);
+      timeEnd.textContent = formatTime(calcularDuracionTotal());
+
+      const palabrasPrevias = chunkWordCounts.slice(0, currentChunkIndex).reduce((acc, val) => acc + val, 0);
+      const palabrasChunk = chunkWordCounts[currentChunkIndex] || 1;
+        const progresoChunk = Math.min(1, audio.currentTime / currentDuration);
+      const palabraActualIndex = Math.min(totalPalabras - 1, Math.floor(palabrasPrevias + (palabrasChunk * progresoChunk)));
+      const palabraActual = palabraElements[palabraActualIndex];
+
+      if (!palabraActual) return;
+
+      if (textConfig.highlightWord) {
+        palabraElements.forEach((p) => p.classList.remove('resaltado', 'highlight-word'));
+        palabraActual.classList.add('highlight-word', 'resaltado');
+        palabraActual.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      } else {
+        palabraElements.forEach((p) => p.classList.remove('resaltado', 'highlight-word'));
+      }
+
+      if (textConfig.highlightSentence && palabraActual.dataset.sentence !== undefined) {
+        const sentenceId = palabraActual.dataset.sentence;
+        if (sentenceId !== currentSentenceId) {
+          palabraElements.forEach((el) => {
+            el.classList.toggle('highlight-sentence', el.dataset.sentence === sentenceId);
+          });
+          currentSentenceId = sentenceId;
+        }
+      } else if (currentSentenceId !== null) {
+        palabraElements.forEach((el) => el.classList.remove('highlight-sentence'));
+        currentSentenceId = null;
+      }
+    }
+
+    function calcularProgresoGlobal(audio) {
+      const duracionActual = chunkDurations[currentChunkIndex] || audio.duration || estimatedChunkDurations[currentChunkIndex] || 1;
+      const currentTimeGlobal = getGlobalPlaybackTime(audio);
+      const duracionTotal = calcularDuracionTotal();
+      return Math.min(1, (playbackElapsedBase + Math.min(audio.currentTime, duracionActual)) / (duracionTotal || duracionActual));
+    }
+
     async function speakNatural(texto, vozNombre, velocidad = 1.0, options = {}) {
-      const { silenciarErrores = false } = options;
+      const { silenciarErrores = false, isPreview = false, startFrom = 0, preloadOnly = false } = options;
 
       if (currentTTSAbortController) {
         currentTTSAbortController.abort();
@@ -2356,7 +2500,7 @@
           await setStoredApiKey(apiKey);
         }
       }
-      
+
       // SI NO HAY API KEY, MOSTRAR ERROR Y DETENER
       if (!apiKey) {
         if (!silenciarErrores) {
@@ -2366,9 +2510,9 @@
         console.error('❌ No se puede reproducir: falta API Key de Google Cloud TTS');
         return null;
       }
-      
+
       const vozConfig = VOICE_CONFIG[vozNombre] || getAvailableVoices().find((v) => v.nombre === vozNombre);
-      
+
       if (!vozConfig) {
         console.error('❌ Voz no configurada:', vozNombre);
         if (!silenciarErrores) {
@@ -2376,84 +2520,124 @@
         }
         return null;
       }
-      
+
       try {
         const textoLimpio = (texto ?? '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
-        const chunks = dividirEnChunks(textoLimpio);
-        
+        const chunks = prepararChunksPorTamanio(textoLimpio);
+
         if (!chunks.length) {
           if (!silenciarErrores) mostrarPopupError('No hay texto para reproducir.');
           return null;
         }
-        
-        const audioBuffers = [];
-        console.log('🎙️ Generando audio con Google Cloud TTS Neural2:', vozConfig.googleVoice);
-        
-        for (const parte of chunks) {
-          console.log('📝 Procesando chunk:', parte.substring(0, 50) + '...');
-          try {
+
+        if (isPreview) {
+          const previewBuffers = [];
+          const previewChunks = dividirEnChunks(textoLimpio);
+          for (const parte of previewChunks) {
             const blob = await generateGoogleTTS(parte, vozConfig.googleVoice, apiKey, velocidad, currentTTSAbortController);
-            audioBuffers.push(blob);
-          } catch (error) {
-            console.error('❌ Google TTS Error:', error);
-            const message = error?.message || 'Error desconocido';
-            let popupMessage = `❌ Error con Google Cloud TTS: ${message}. Verifica tu API Key.`;
-
-            if (error.name === 'AbortError') {
-              console.warn('⚠️ Generación de audio cancelada');
-              return null;
-            }
-
-            if (error.name === 'TimeoutError') {
-              popupMessage = '⏳ Tiempo de espera agotado al generar audio tras varios intentos. Intenta de nuevo.';
-              if (!silenciarErrores) {
-                mostrarPopupError(popupMessage);
-              }
-              return null;
-            }
-
-            // ERRORES ESPECÍFICOS CON MENSAJES CLAROS
-            if (message.includes('403') || message.includes('permission')) {
-              await setStoredApiKey(null);
-              actualizarEstadoAPIKeyUI(false);
-              if (!silenciarErrores) {
-                popupMessage = '❌ API Key sin permisos. Verifica que esté habilitada la API de Text-to-Speech en Google Cloud.';
-                mostrarPopupError(popupMessage);
-                setTimeout(() => mostrarApiKeySetupModal(), 1000);
-              }
-            } else if (message.includes('429') || message.includes('quota')) {
-              if (!silenciarErrores) {
-                popupMessage = '⚠️ Límite de cuota de Google Cloud TTS excedido. Intenta más tarde.';
-                mostrarPopupError(popupMessage);
-              }
-            } else if (message.includes('401') || message.includes('invalid')) {
-              await setStoredApiKey(null);
-              actualizarEstadoAPIKeyUI(false);
-              if (!silenciarErrores) {
-                popupMessage = '❌ API Key inválida. Verifica tu clave de Google Cloud.';
-                mostrarPopupError(popupMessage);
-                setTimeout(() => mostrarApiKeySetupModal(), 1000);
-              }
-            } else {
-              if (!silenciarErrores) {
-                mostrarPopupError(popupMessage);
-              }
-            }
-            
-            // NO HACER FALLBACK - Retornar null
-            return null;
+            previewBuffers.push(blob);
           }
+          const audioBlob = new Blob(previewBuffers, { type: 'audio/mp3' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          audio.playbackRate = velocidad;
+          audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
+          setVoiceSystem('google', vozConfig?.nombre || vozNombre);
+          return audio;
         }
 
-        const audioBlob = new Blob(audioBuffers, { type: 'audio/mp3' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
-        
-        console.log('✅ Audio generado exitosamente con Google Cloud TTS Neural2');
+        resetChunkingState();
+        chunkTexts = chunks;
+        chunkWordCounts = chunks.map((chunk) => chunk.trim().split(/\s+/).filter(Boolean).length);
+        estimatedChunkDurations = calcularDuracionEstimadasPorChunk(velocidad);
+        chunkDurations = Array(chunks.length).fill(0);
+
+        const calcularInicio = (segundosInicio) => {
+          let acumulado = 0;
+          let indiceInicio = 0;
+          let offset = 0;
+          estimatedChunkDurations.forEach((duracion, idx) => {
+            if (acumulado + duracion <= segundosInicio) {
+              acumulado += duracion;
+              indiceInicio = idx + 1;
+            }
+          });
+          if (indiceInicio >= chunkTexts.length) {
+            indiceInicio = chunkTexts.length - 1;
+            acumulado = estimatedChunkDurations.slice(0, indiceInicio).reduce((acc, val) => acc + val, 0);
+          }
+          offset = Math.max(0, segundosInicio - acumulado);
+          return { indiceInicio, offset, acumulado };
+        };
+
+        const { indiceInicio, offset, acumulado } = calcularInicio(startFrom);
+        currentChunkIndex = indiceInicio;
+        playbackElapsedBase = acumulado;
+
+        console.log('🎙️ Generando audio con Google Cloud TTS Neural2:', vozConfig.googleVoice);
+        const initialUrl = await generarAudioChunk(indiceInicio, vozConfig, apiKey, velocidad, currentTTSAbortController);
+        const audio = new Audio(initialUrl);
+        audio.playbackRate = velocidad;
+
+        audio.addEventListener('loadedmetadata', () => {
+          chunkDurations[indiceInicio] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+          if (offset) {
+            audio.currentTime = Math.min(offset, audio.duration - 0.25);
+          }
+          timeEnd.textContent = formatTime(calcularDuracionTotal());
+        }, { once: true });
+
+        audio.addEventListener('timeupdate', () => handleChunkTimeUpdate(audio, palabraElements.length, vozConfig, apiKey, velocidad));
+
+        audio.addEventListener('ended', async () => {
+          const currentDuration = chunkDurations[currentChunkIndex] || audio.duration || estimatedChunkDurations[currentChunkIndex] || 0;
+          playbackElapsedBase += currentDuration;
+          if (audioQueue.length > 0) {
+            const nextAudio = audioQueue.shift();
+            currentChunkIndex += 1;
+            audio.src = nextAudio;
+            audio.addEventListener('loadedmetadata', () => {
+              chunkDurations[currentChunkIndex] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+              timeEnd.textContent = formatTime(calcularDuracionTotal());
+            }, { once: true });
+            audio.play().catch((err) => console.error(err));
+          } else if (currentChunkIndex < chunkTexts.length - 1) {
+            try {
+              await precargarSiguienteChunk(apiKey, vozConfig, velocidad, currentTTSAbortController);
+              if (audioQueue.length) {
+                const siguiente = audioQueue.shift();
+                currentChunkIndex += 1;
+                audio.src = siguiente;
+                audio.addEventListener('loadedmetadata', () => {
+                  chunkDurations[currentChunkIndex] = audio.duration / Math.max(0.1, audio.playbackRate || 1);
+                  timeEnd.textContent = formatTime(calcularDuracionTotal());
+                }, { once: true });
+                audio.play().catch((err) => console.error(err));
+              } else {
+                mostrarPopupError('No pudimos cargar el siguiente fragmento.');
+                detenerLectura();
+              }
+            } catch (error) {
+              console.error('Error al recuperar chunk faltante', error);
+              mostrarPopupError('No pudimos recuperar el siguiente fragmento.');
+              detenerLectura();
+            }
+          } else {
+            if (repeatPlayback) {
+              console.log('🔁 Repitiendo reproducción');
+              detenerLectura();
+              iniciarLectura();
+            } else {
+              detenerLectura();
+            }
+          }
+        });
+
+        precargarSiguienteChunk(apiKey, vozConfig, velocidad, currentTTSAbortController);
         setVoiceSystem('google', vozConfig?.nombre || vozNombre);
+        if (preloadOnly) return audio;
         return audio;
-        
+
       } catch (error) {
         console.error('❌ Error en síntesis de voz:', error);
         if (!silenciarErrores) {
@@ -2820,6 +3004,11 @@
     const editTitle = document.getElementById('edit-title');
     const editContent = document.getElementById('edit-content');
     const saveEdit = document.getElementById('save-edit');
+    const highlightBtn = document.querySelector('.player-toolbar .icon-btn[title="Resaltar"]');
+    const sizeBtn = document.querySelector('.player-toolbar .icon-btn[title="Tamaño"]');
+    const aiBtn = document.querySelector('.player-toolbar .icon-btn[title="IA"]');
+    const shareBtn = document.querySelector('.player-toolbar .icon-btn[title="Compartir"]');
+    const optionsBtn = document.querySelector('.player-toolbar .icon-btn[title="Opciones"]');
     const cancelEdit = document.getElementById('cancel-edit');
     const loaderProceso = document.getElementById('loader-proceso');
     const loaderTitulo = document.getElementById('loader-titulo');
@@ -2841,6 +3030,20 @@
     let dockedConfigPanel = false;
     let notas = JSON.parse(localStorage.getItem('notasApp') || '{}');
     let audioDuration = 0;
+    let audioQueue = [];
+    let audioChunkUrls = [];
+    let chunkDurations = [];
+    let chunkWordCounts = [];
+    let chunkTexts = [];
+    let estimatedChunkDurations = [];
+    let currentChunkIndex = 0;
+    let isLoadingNextChunk = false;
+    let savedPlaybackPosition = 0;
+    let isChangingVoice = false;
+    let playbackElapsedBase = 0;
+    let pendingVoiceAudio = null;
+    let audioPreview = null;
+    let repeatPlayback = false;
 
     const getTextConfigKey = () => `textConfig_${currentUser?.uid || 'guest'}`;
 
@@ -3731,6 +3934,7 @@
             await syncUserDocuments(user.uid);
             await loadUserSettings(user.uid);
             await inicializarAPIKey();
+            await verificarYMostrarPopupAPIKey();
           } catch (error) {
             handleFirebaseOperationError('cargar datos de usuario', error);
           }
@@ -3975,6 +4179,31 @@
       setVoiceSystem(key ? 'google' : 'browser');
       window.dispatchEvent(new Event('apiKeyUpdated'));
     };
+
+    async function verificarYMostrarPopupAPIKey() {
+      const user = firebase?.auth?.()?.currentUser;
+      if (!user) return;
+
+      try {
+        const docRef = firebase.firestore().collection('users').doc(user.uid);
+        const doc = await docRef.get();
+
+        if (doc.exists && doc.data().googleTTSKey) {
+          console.log('API key ya configurada, no mostrar popup');
+          return;
+        }
+
+        const localKey = localStorage.getItem('googleTTSKey');
+        if (localKey && localKey.length > 0) {
+          console.log('API key en localStorage, no mostrar popup');
+          return;
+        }
+
+        mostrarPopupAPIKey();
+      } catch (error) {
+        console.warn('No se pudo verificar la API Key antes de mostrar el popup', error);
+      }
+    }
 
     function getAvailableVoices() {
       const naturalVoices = getVoicesForLanguage(currentLanguage, Object.values(VOICE_CONFIG));
@@ -4496,9 +4725,31 @@
           renderVoices();
           actualizarAvatarVoz(vozSeleccionada);
           setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser', vozSeleccionada);
+          if (isChangingVoice && documentoActivo) {
+            speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual, {
+              startFrom: savedPlaybackPosition,
+              preloadOnly: true
+            })
+              .then((audio) => { pendingVoiceAudio = audio; })
+              .catch((error) => {
+                console.warn('No se pudo precargar la nueva voz', error);
+                pendingVoiceAudio = null;
+              });
+          }
         });
         voiceList.appendChild(card);
       });
+    }
+
+    function detenerPreviewActual() {
+      if (audioPreview) {
+        try {
+          audioPreview.pause();
+        } catch (e) {
+          console.warn('No se pudo pausar el preview');
+        }
+      }
+      audioPreview = null;
     }
 
     async function previewVoice(vozNombre) {
@@ -4521,22 +4772,20 @@
 
       console.log('🔊 Preview de voz:', vozNombre, 'idioma:', vozConfig.languageCode);
 
-      // Detener cualquier reproducción previa
-      if (window.currentPreviewAudio) {
-        try {
-          window.currentPreviewAudio.pause();
-        } catch (e) {
-          console.warn('No se pudo pausar audio previo');
-        }
+      if (audioElement && !audioElement.paused) {
+        mostrarPopupError('Pausa la reproducción antes de previsualizar otra voz.');
+        return;
       }
+
+      detenerPreviewActual();
 
       // Generar y reproducir audio
       try {
-        const audio = await speakNatural(texto, vozNombre, 1.0, { silenciarErrores: true });
+        const audio = await speakNatural(texto, vozNombre, 1.0, { silenciarErrores: true, isPreview: true });
 
         if (audio) {
-          window.currentPreviewAudio = audio;
-          audio.play();
+          audioPreview = audio;
+          audioPreview.play();
           console.log('✅ Reproduciendo preview');
         } else {
           mostrarPopupError('No se pudo generar el audio de previsualización.');
@@ -4706,6 +4955,11 @@
     }
 
     voiceBtn.addEventListener('click', () => {
+      if (audioElement && !audioElement.paused) {
+        savedPlaybackPosition = getGlobalPlaybackTime(audioElement);
+        audioElement.pause();
+        isChangingVoice = true;
+      }
       renderVoices();
       openModal(voiceModal);
     });
@@ -4901,10 +5155,14 @@
         audioObjectUrl = null;
       }
 
+      revokeChunkUrls();
+      resetChunkingState();
+      pendingVoiceAudio = null;
+
       audioElement = null;
     }
 
-    async function iniciarLectura() {
+    async function iniciarLectura(startFrom = 0) {
       if (isGeneratingAudio) return;
 
       if (!documentoActivo) {
@@ -4912,6 +5170,7 @@
         return;
       }
 
+      savedPlaybackPosition = startFrom || 0;
       console.log('▶️ Iniciando lectura:', documentoActivo.titulo);
       togglePlayButtonLoading(true);
 
@@ -4923,6 +5182,7 @@
       }
 
       cancelarAudioActual();
+      detenerPreviewActual();
       stop();
 
       highlightTexto(documentoActivo.texto);
@@ -4935,8 +5195,11 @@
       try {
         if (!userGoogleTTSKey && hasAPIKeySkipPreference()) {
           audioElement = await usarVozNavegador(documentoActivo.texto, vozConfig, velocidadActual);
+        } else if (pendingVoiceAudio) {
+          audioElement = pendingVoiceAudio;
+          pendingVoiceAudio = null;
         } else {
-          audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual);
+          audioElement = await speakNatural(documentoActivo.texto, vozSeleccionada, velocidadActual, { startFrom });
         }
       } finally {
         togglePlayButtonLoading(false);
@@ -4951,18 +5214,11 @@
         return;
       }
 
-      audioElement.addEventListener('loadedmetadata', () => {
-        console.log(`⏱️ Duración: ${formatTime(audioElement.duration)}`);
-        timeEnd.textContent = formatTime(audioElement.duration);
-      });
-
-      audioElement.addEventListener('timeupdate', () => {
+      const actualizarProgresoBasico = () => {
         if (!audioElement.duration || !palabrasTotales || !palabraElements.length) return;
-
         const currentTime = audioElement.currentTime;
         const duration = audioElement.duration;
         const porcentaje = currentTime / duration;
-
         progress.style.width = `${porcentaje * 100}%`;
         progressThumb.style.left = `${porcentaje * 100}%`;
         timeStart.textContent = formatTime(currentTime);
@@ -4970,9 +5226,7 @@
 
         const palabraActualIndex = Math.min(palabrasTotales - 1, Math.floor(palabrasTotales * porcentaje));
         const palabraActual = palabraElements[palabraActualIndex];
-
         if (!palabraActual) return;
-
         if (textConfig.highlightWord) {
           palabraElements.forEach((p) => p.classList.remove('resaltado', 'highlight-word'));
           palabraActual.classList.add('highlight-word', 'resaltado');
@@ -4993,11 +5247,23 @@
           palabraElements.forEach((el) => el.classList.remove('highlight-sentence'));
           currentSentenceId = null;
         }
+      };
+
+      if (!userGoogleTTSKey && hasAPIKeySkipPreference()) {
+        audioElement.addEventListener('timeupdate', actualizarProgresoBasico);
+      }
+
+      audioElement.addEventListener('loadedmetadata', () => {
+        console.log(`⏱️ Duración: ${formatTime(audioElement.duration)}`);
       });
 
       audioElement.addEventListener('ended', () => {
         console.log('✅ Reproducción finalizada');
-        detenerLectura();
+        if (repeatPlayback) {
+          iniciarLectura();
+        } else {
+          detenerLectura();
+        }
       });
 
       try {
@@ -5024,6 +5290,11 @@
         currentTTSAbortController = null;
       }
       stop();
+      revokeChunkUrls();
+      resetChunkingState();
+      pendingVoiceAudio = null;
+      savedPlaybackPosition = 0;
+      isChangingVoice = false;
       isGeneratingAudio = false;
       playPauseBtn.disabled = false;
       refreshPlayButtonLabel();
@@ -5039,9 +5310,12 @@
         return;
       }
 
-      if (!audioElement) {
-        iniciarLectura();
+      if (!audioElement || isChangingVoice) {
+        const tiempoInicio = isChangingVoice ? savedPlaybackPosition : 0;
+        isChangingVoice = false;
+        iniciarLectura(tiempoInicio);
       } else if (audioElement.paused) {
+        detenerPreviewActual();
         audioElement.play();
         refreshPlayButtonLabel();
         console.log('▶️ Reanudando');
@@ -5120,6 +5394,40 @@
     closeTextConfigBtn?.addEventListener('click', closeTextConfigPanel);
     textConfigOverlay?.addEventListener('click', closeTextConfigPanel);
     dockTextConfigBtn?.addEventListener('click', toggleDockConfigPanel);
+
+    highlightBtn?.addEventListener('click', () => {
+      textConfig.highlightWord = !textConfig.highlightWord;
+      textConfig.highlightSentence = textConfig.highlightWord;
+      highlightBtn.classList.toggle('active', textConfig.highlightWord);
+      applyTextConfig(true);
+    });
+
+    sizeBtn?.addEventListener('click', () => {
+      const nextSize = textConfig.fontSize >= 32 ? TEXT_CONFIG_DEFAULTS.fontSize : textConfig.fontSize + 2;
+      textConfig.fontSize = nextSize;
+      applyTextConfig(true);
+    });
+
+    aiBtn?.addEventListener('click', () => {
+      repeatPlayback = !repeatPlayback;
+      aiBtn.classList.toggle('active', repeatPlayback);
+    });
+
+    shareBtn?.addEventListener('click', async () => {
+      if (!documentoActivo) return;
+      try {
+        await navigator.clipboard.writeText(documentoActivo.texto || '');
+        mostrarPopupExito('Texto copiado para compartir.');
+      } catch (error) {
+        console.warn('No se pudo copiar el texto', error);
+        mostrarPopupError('No pudimos copiar el contenido para compartir.');
+      }
+    });
+
+    optionsBtn?.addEventListener('click', () => {
+      detenerLectura();
+      savedPlaybackPosition = 0;
+    });
 
     fontSizeSlider?.addEventListener('input', (e) => {
       textConfig.fontSize = Number(e.target.value);
