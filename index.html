@@ -2696,23 +2696,39 @@
         return null;
       }
 
-      const isClonedVoice = vozConfig?.isCloned && vozConfig?.audioBase64;
+      const isClonedVoice = vozConfig?.isCloned === true;
+      const hasClonedAudio = !!vozConfig?.audioBase64;
 
       if (isClonedVoice) {
+        console.log('🎙️ Voz clonada detectada:', vozConfig.nombre);
+        console.log('📦 Audio base64 presente:', hasClonedAudio);
+
+        if (!hasClonedAudio) {
+          console.error('❌ La voz clonada no tiene audio disponible');
+          if (!silenciarErrores) {
+            mostrarPopupError('Tu voz clonada no tiene audio. Grábala o súbela de nuevo.');
+          }
+          return null;
+        }
+
         try {
           const blob = dataUrlToBlob(vozConfig.audioBase64, vozConfig.audioContentType || 'audio/wav');
           if (!blob) throw new Error('No se pudo reconstruir el audio de la voz clonada');
           const audioUrl = URL.createObjectURL(blob);
           const audio = new Audio(audioUrl);
+          audio.loop = true;
           audio.playbackRate = velocidad;
+          audio.addEventListener('pause', () => URL.revokeObjectURL(audioUrl), { once: true });
           audio.addEventListener('ended', () => URL.revokeObjectURL(audioUrl), { once: true });
           setVoiceSystem('browser', vozConfig?.nombre || vozNombre);
+          console.log('🔊 Reproduciendo audio clonado desde blob local');
           return audio;
         } catch (error) {
           console.error('❌ Error usando la voz clonada local', error);
           if (!silenciarErrores) {
             mostrarPopupError('No se pudo usar tu voz clonada. Vuelve a grabarla o súbela de nuevo.');
           }
+          return null;
         }
       }
 
