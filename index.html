@@ -1271,11 +1271,6 @@
     </section>
   </div>
 
-  <section class="config-seccion" id="feature-checklist" style="display:none;">
-    <h3 class="titulo-seccion">Checklist de pruebas</h3>
-    <ul id="feature-checklist-list" style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px;"></ul>
-  </section>
-
   <div class="text-config-overlay" id="text-config-overlay"></div>
   <aside class="text-config-panel" id="text-config-panel" role="dialog" aria-modal="true" aria-labelledby="text-config-title">
     <div class="text-config-header">
@@ -2833,7 +2828,7 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const store = tx.objectStore('documentos');
-      const defaultVoice = doc.vozSeleccionada || doc.voz || vozSeleccionada || localStorage.getItem('vozSeleccionada') || 'Sasha';
+      const defaultVoice = doc.vozSeleccionada || doc.voz || obtenerVozPreferida();
       const payload = {
         ...doc,
         id: doc.id || generateId(),
@@ -3064,6 +3059,10 @@
     let repeatPlayback = false;
 
     const getTextConfigKey = () => `textConfig_${currentUser?.uid || 'guest'}`;
+
+    const obtenerVozPreferida = () => {
+      return localStorage.getItem('vozSeleccionada') || vozSeleccionada || 'Sasha';
+    };
 
     function loadTextConfig() {
       try {
@@ -4444,6 +4443,7 @@
         const prefs = data.preferences || {};
         if (prefs.voice) {
           vozSeleccionada = prefs.voice;
+          localStorage.setItem('vozSeleccionada', vozSeleccionada);
           updateVoiceLabels(vozSeleccionada);
         }
         if (prefs.speed) {
@@ -5445,12 +5445,14 @@
       playerTitle.textContent = doc.titulo;
       highlightTexto(doc.texto);
       setSpeed(doc.velocidad || velocidadActual);
-      const preferredVoice = doc.vozSeleccionada || vozSeleccionada || localStorage.getItem('vozSeleccionada') || 'Sasha';
-      vozSeleccionada = preferredVoice;
+      const preferredVoice = obtenerVozPreferida();
+      const finalVoice = preferredVoice || doc.vozSeleccionada || 'Sasha';
+      vozSeleccionada = finalVoice;
       updateVoiceLabels(vozSeleccionada);
       actualizarAvatarVoz(vozSeleccionada);
-      if (!doc.vozSeleccionada && doc.id) {
-        updateDocumento(doc.id, { vozSeleccionada });
+      if (doc.id && doc.vozSeleccionada !== finalVoice) {
+        updateDocumento(doc.id, { vozSeleccionada: finalVoice });
+        doc.vozSeleccionada = finalVoice;
       }
       switchPage('player');
     }
@@ -5459,7 +5461,7 @@
       documentoActivo = doc;
       docMenuTitle.textContent = doc.titulo;
       docMenuType.textContent = doc.tipo;
-      docVoiceLabel.textContent = doc.vozSeleccionada || vozSeleccionada;
+      docVoiceLabel.textContent = doc.vozSeleccionada || obtenerVozPreferida();
       docPreview.src = doc.miniatura || 'https://placehold.co/60x60';
       openModal(docMenu);
     }
@@ -5931,59 +5933,6 @@
       });
     }));
 
-    function renderChecklist(items = []) {
-      const checklist = document.getElementById('feature-checklist');
-      const list = document.getElementById('feature-checklist-list');
-      if (!checklist || !list) return;
-      list.innerHTML = '';
-      items.forEach((item) => {
-        const li = document.createElement('li');
-        li.style.display = 'flex';
-        li.style.alignItems = 'center';
-        li.style.gap = '8px';
-        li.innerHTML = `${item.pass ? '✅' : '⚠️'} <strong>${item.label}</strong><span style="color:#666; font-size:13px;">${item.detail || ''}</span>`;
-        list.appendChild(li);
-      });
-      checklist.style.display = 'block';
-    }
-
-    function runFeatureChecklist() {
-      const results = [];
-      const storedVoice = localStorage.getItem('vozSeleccionada') || vozSeleccionada;
-      results.push({
-        label: 'Preferencia de voz persistente',
-        pass: !!storedVoice && storedVoice === vozSeleccionada,
-        detail: `Voz actual: ${vozSeleccionada}`
-      });
-
-      const prefTitle = document.querySelector('[data-i18n="settings.preferences"]');
-      results.push({
-        label: 'Cambio de idioma solo en la interfaz',
-        pass: prefTitle?.textContent === getTranslation('settings.preferences', currentLanguage),
-        detail: `lang=${document.documentElement.lang}`
-      });
-
-      const shareAction = document.querySelector('[data-action="compartir"]');
-      results.push({
-        label: 'Compartir página',
-        pass: !!shareAction && shareAction.dataset.shareTarget === 'page',
-        detail: 'Se comparte la URL actual'
-      });
-
-      results.push({
-        label: 'Soporte oculto',
-        pass: !document.querySelector('[data-action="ayuda"]'),
-        detail: 'Sin accesos a soporte/ayuda'
-      });
-
-      results.push({
-        label: 'Ver contraseña al registrarse',
-        pass: !!document.querySelector('.toggle-password'),
-        detail: 'Botón de mostrar/ocultar disponible'
-      });
-
-      renderChecklist(results);
-    }
 
       window.addEventListener('DOMContentLoaded', async () => {
         // ✅ FORZAR PÁGINA INICIAL
@@ -6063,7 +6012,6 @@
 
       // Inicializar textos en el idioma actual
       updateUITranslations(currentLanguage);
-      runFeatureChecklist();
       console.log('✅ Idioma inicializado:', currentLanguage);
     });
   </script>
