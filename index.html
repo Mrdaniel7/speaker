@@ -383,8 +383,9 @@
     .config-item span { font-size: 16px; font-weight: 600; }
     .valor-actual, .flecha { margin-left: auto; color: #666; font-size: 14px; font-weight: 600; }
     .cuenta-item { display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--borde-gris); }
-    .cuenta-resumen { gap: 12px; cursor: default; }
-    .cuenta-resumen .btn-desconectar { margin-left: auto; background: #FFE8E6; border: 1px solid #FADBD8; color: #C0392B; padding: 8px 14px; border-radius: 12px; cursor: pointer; font-weight: 700; }
+    .cuenta-resumen { gap: 12px; cursor: default; justify-content: space-between; }
+    .cuenta-resumen__contenido { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .cuenta-resumen .btn-desconectar { margin-left: 16px; background: #FFE8E6; border: 1px solid #FADBD8; color: #C0392B; padding: 8px 14px; border-radius: 12px; cursor: pointer; font-weight: 700; }
     .icono-servicio { width: 28px; height: 28px; }
     .btn-desconectar { margin-left: auto; background: #FF3B30; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 12px rgba(255,59,48,0.22); }
     .descripcion-cuenta { color: var(--texto-gris); font-size: 14px; padding: 0 12px 12px; }
@@ -1205,45 +1206,40 @@
             <h3 class="titulo-seccion" data-i18n="settings.preferences">Preferencias</h3>
             <div class="config-item" data-action="clonacion">
               <div class="icono-config">🎙️</div>
-              <span>Clonación de Voz</span>
+              <span data-i18n="settings.voiceCloning">Clonación de Voz</span>
               <span class="flecha">›</span>
             </div>
             <div class="config-item" data-action="config-api">
               <div class="icono-config">🔐</div>
-              <span>API Key de Google TTS</span>
+              <span data-i18n="settings.googleApi">API Key de Google TTS</span>
               <span class="valor-actual" id="api-status-label">Sin configurar</span>
             </div>
             <div class="config-item" data-action="config-firebase">
               <div class="icono-config">☁️</div>
-              <span>Proyecto Firebase</span>
+              <span data-i18n="settings.firebaseProject">Proyecto Firebase</span>
               <span class="valor-actual" id="firebase-status-label">Sin configurar</span>
             </div>
             <div class="config-item" data-action="cambiar-voz">
               <div class="icono-config">🔊</div>
-              <span>Cambiar Voz</span>
+              <span data-i18n="settings.changeVoice">Cambiar Voz</span>
               <span class="valor-actual" id="voz-actual">Sasha</span>
             </div>
             <div class="config-item" data-action="idioma">
               <div class="icono-config">🌐</div>
-              <span>Idioma de la aplicación</span>
-              <span class="valor-actual">Español</span>
-            </div>
-            <div class="config-item" data-action="solicitar">
-              <div class="icono-config">✏️</div>
-              <span>Solicitar Función</span>
-              <span class="flecha">›</span>
+              <span data-i18n="settings.language">Idioma de la aplicación</span>
+              <span class="valor-actual" id="language-current-label">Español</span>
             </div>
           </section>
 
           <section id="api-key-settings" class="config-seccion" style="display:none;">
-            <h3 class="titulo-seccion">API Keys</h3>
+            <h3 class="titulo-seccion" data-i18n="settings.apiKeys">API Keys</h3>
             <div class="config-item">
               <div class="icono-config">🔑</div>
               <div style="display:flex; flex-direction:column; gap:4px;">
-                <label style="font-weight:600;">Google TTS API Key:</label>
+                <label style="font-weight:600;" data-i18n="settings.googleApi.label">Google TTS API Key:</label>
                 <span id="current-api-key" style="font-weight:700; color:#1A1A1A;">Sin configurar</span>
               </div>
-              <button class="btn-primario" style="margin-left:auto;" onclick="editAPIKey()">Cambiar</button>
+              <button class="btn-primario" style="margin-left:auto;" onclick="editAPIKey()" data-i18n="settings.change">Cambiar</button>
             </div>
           </section>
 
@@ -1251,7 +1247,7 @@
             <h3 class="titulo-seccion" data-i18n="account.title">Tu cuenta</h3>
             <div class="config-item cuenta-resumen">
               <div class="icono-config">📧</div>
-              <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+              <div class="cuenta-resumen__contenido">
                 <span id="user-email-display">Sin sesión</span>
                 <small id="email-verified-badge" style="color:#666; font-weight:600;">Email no verificado</small>
               </div>
@@ -1449,7 +1445,7 @@
   <div class="modal-idioma" id="language-modal">
     <header>
       <button class="btn-volver" data-close>&lt;</button>
-      <h2>Cambiar idioma de la aplicación</h2>
+      <h2 data-i18n="settings.language.modalTitle">Cambiar idioma de la aplicación</h2>
     </header>
     <div class="lista-idiomas" id="language-list"></div>
   </div>
@@ -1534,6 +1530,7 @@
     const GUEST_MODE_KEY = 'isGuestMode';
     const GUEST_API_KEY_STORAGE_KEY = 'googleTTSKey_guest';
     const GUEST_SKIP_API_KEY_KEY = 'skipAPIKey_guest';
+    const SHARE_APP_URL = 'https://mrdaniel7.github.io/speaker/';
 
     const LEGACY_FIREBASE_CONFIG = {
       apiKey: "AIzaSyAsp5EL1SMvbD80F2bcJim9p62ceYwfgqc",
@@ -1635,39 +1632,39 @@
       mostrarPopupError('No pudimos completar la acción. Verifica tu conexión o configuración de Firebase.');
     }
 
-    function initializeFirebaseApp() {
-      if (isGuestMode) {
-        firebaseAppInitialized = false;
-        updateFirebaseStatusLabel('Modo invitado');
-        return;
-      }
-      const config = getActiveFirebaseConfig();
-      firebaseConfigInUse = config;
+      function initializeFirebaseApp() {
+        if (isGuestMode) {
+          firebaseAppInitialized = false;
+          updateFirebaseStatusLabel(t('settings.firebase.guest'));
+          return;
+        }
+        const config = getActiveFirebaseConfig();
+        firebaseConfigInUse = config;
 
-      if (!validateFirebaseConfig(config)) {
-        firebaseAppInitialized = false;
-        updateFirebaseStatusLabel('Sin configurar');
-        lastFirebaseInitError = new Error('Faltan credenciales de Firebase');
-        return;
-      }
+        if (!validateFirebaseConfig(config)) {
+          firebaseAppInitialized = false;
+          updateFirebaseStatusLabel(t('settings.googleApi.status.unconfigured'));
+          lastFirebaseInitError = new Error('Faltan credenciales de Firebase');
+          return;
+        }
 
       if (!firebase.apps.length) {
         try {
           firebase.initializeApp(config);
           firebaseAppInitialized = true;
           lastFirebaseInitError = null;
-          console.log('🔥 Firebase inicializado', {
-            apiKeyPresent: !!config.apiKey,
-            authDomain: config.authDomain,
-            projectId: config.projectId,
-            storageBucket: config.storageBucket
-          });
-          updateFirebaseStatusLabel(config.projectId || 'Listo');
-        } catch (error) {
-          firebaseAppInitialized = false;
-          lastFirebaseInitError = error;
-          console.error('❌ No se pudo inicializar Firebase', error);
-          updateFirebaseStatusLabel('Error');
+            console.log('🔥 Firebase inicializado', {
+              apiKeyPresent: !!config.apiKey,
+              authDomain: config.authDomain,
+              projectId: config.projectId,
+              storageBucket: config.storageBucket
+            });
+            updateFirebaseStatusLabel(config.projectId || t('settings.googleApi.status.configured'));
+          } catch (error) {
+            firebaseAppInitialized = false;
+            lastFirebaseInitError = error;
+            console.error('❌ No se pudo inicializar Firebase', error);
+            updateFirebaseStatusLabel('Error');
         }
       }
     }
@@ -1781,6 +1778,19 @@
         'nav.library': 'Mi Biblioteca',
         'nav.settings': 'Configuraciones',
         'settings.preferences': 'Preferencias',
+        'settings.voiceCloning': 'Clonación de Voz',
+        'settings.googleApi': 'API Key de Google TTS',
+        'settings.googleApi.label': 'Google TTS API Key:',
+        'settings.googleApi.status.required': '⚠️ API Key requerida',
+        'settings.googleApi.status.configured': 'Configurada',
+        'settings.googleApi.status.unconfigured': 'Sin configurar',
+        'settings.firebaseProject': 'Proyecto Firebase',
+        'settings.firebase.guest': 'Modo invitado',
+        'settings.changeVoice': 'Cambiar Voz',
+        'settings.language': 'Idioma de la aplicación',
+        'settings.language.modalTitle': 'Cambiar idioma de la aplicación',
+        'settings.apiKeys': 'API Keys',
+        'settings.change': 'Cambiar',
         'home.banner.title': 'Obtén un resumen rápido de un archivo o pregunta al AI cualquier cosa',
         'home.section.title': '¿Qué quieres escuchar hoy?',
         'home.document.title': 'Documento',
@@ -1799,11 +1809,29 @@
         'library.tab.finished': 'Finalizado',
         'library.tab.favorites': 'Favoritos',
         'settings.title': 'Configuraciones',
-        'settings.language': 'Idioma de la aplicación',
         'account.title': 'Tu cuenta',
         'account.logout': 'Cerrar Sesión',
+        'account.emailVerified': 'Email verificado ✅',
+        'account.emailUnverified': 'Verifica tu email para continuar',
+        'account.localSession': 'Sesión local sin verificación',
         'share.title': 'Compartir',
-        'share.app': 'Compartir Listen AI'
+        'share.app': 'Compartir Listen AI',
+        'share.linkCopied': 'Enlace copiado para compartir',
+        'share.error': 'No se pudo compartir en este dispositivo',
+        'share.clipboardError': 'No se pudo copiar el enlace',
+        'share.message': 'Mira esta página',
+        'status.guestMode': 'Modo invitado',
+        'status.noSession': 'Sin sesión',
+        'languages.en-US': 'Inglés (EE.UU)',
+        'languages.en-GB': 'Inglés (Reino Unido)',
+        'languages.es': 'Español',
+        'languages.pt-BR': 'Portugués (Brasil)',
+        'languages.pt-PT': 'Portugués (Portugal)',
+        'languages.fr': 'Francés',
+        'languages.it': 'Italiano',
+        'languages.de': 'Alemán',
+        'languages.tr': 'Turco',
+        'languages.zh': 'Chino simplificado'
       },
       'en': {
         'appTitle': 'Listen AI Clone',
@@ -1812,6 +1840,19 @@
         'nav.library': 'My Library',
         'nav.settings': 'Settings',
         'settings.preferences': 'Preferences',
+        'settings.voiceCloning': 'Voice Cloning',
+        'settings.googleApi': 'Google TTS API Key',
+        'settings.googleApi.label': 'Google TTS API Key:',
+        'settings.googleApi.status.required': '⚠️ API Key required',
+        'settings.googleApi.status.configured': 'Configured',
+        'settings.googleApi.status.unconfigured': 'Not configured',
+        'settings.firebaseProject': 'Firebase Project',
+        'settings.firebase.guest': 'Guest mode',
+        'settings.changeVoice': 'Change Voice',
+        'settings.language': 'App Language',
+        'settings.language.modalTitle': 'Change app language',
+        'settings.apiKeys': 'API Keys',
+        'settings.change': 'Change',
         'home.banner.title': 'Get a quick summary of a file or ask AI anything',
         'home.section.title': 'What do you want to listen to today?',
         'home.document.title': 'Document',
@@ -1830,11 +1871,29 @@
         'library.tab.finished': 'Finished',
         'library.tab.favorites': 'Favorites',
         'settings.title': 'Settings',
-        'settings.language': 'App Language',
         'account.title': 'Your account',
         'account.logout': 'Sign out',
+        'account.emailVerified': 'Email verified ✅',
+        'account.emailUnverified': 'Verify your email to continue',
+        'account.localSession': 'Local session without verification',
         'share.title': 'Share',
-        'share.app': 'Share Listen AI'
+        'share.app': 'Share Listen AI',
+        'share.linkCopied': 'Link copied to share',
+        'share.error': 'Sharing is not available on this device',
+        'share.clipboardError': 'Could not copy the link',
+        'share.message': 'Check out this page',
+        'status.guestMode': 'Guest mode',
+        'status.noSession': 'No session',
+        'languages.en-US': 'English (US)',
+        'languages.en-GB': 'English (UK)',
+        'languages.es': 'Spanish',
+        'languages.pt-BR': 'Portuguese (Brazil)',
+        'languages.pt-PT': 'Portuguese (Portugal)',
+        'languages.fr': 'French',
+        'languages.it': 'Italian',
+        'languages.de': 'German',
+        'languages.tr': 'Turkish',
+        'languages.zh': 'Simplified Chinese'
       },
       'pt': {
         'appTitle': 'Listen AI Clone',
@@ -1843,15 +1902,46 @@
         'nav.library': 'Minha Biblioteca',
         'nav.settings': 'Configurações',
         'settings.preferences': 'Preferências',
+        'settings.voiceCloning': 'Clonagem de Voz',
+        'settings.googleApi': 'Chave da API Google TTS',
+        'settings.googleApi.label': 'Chave da API Google TTS:',
+        'settings.googleApi.status.required': '⚠️ Chave de API necessária',
+        'settings.googleApi.status.configured': 'Configurada',
+        'settings.googleApi.status.unconfigured': 'Não configurada',
+        'settings.firebaseProject': 'Projeto Firebase',
+        'settings.firebase.guest': 'Modo convidado',
+        'settings.changeVoice': 'Alterar Voz',
         'home.banner.title': 'Obtenha um resumo rápido de um arquivo ou pergunte qualquer coisa à IA',
         'home.section.title': 'O que você quer ouvir hoje?',
         'library.title': 'Minha Biblioteca',
         'settings.title': 'Configurações',
         'settings.language': 'Idioma do aplicativo',
+        'settings.language.modalTitle': 'Alterar idioma do aplicativo',
+        'settings.apiKeys': 'Chaves de API',
+        'settings.change': 'Alterar',
         'account.title': 'Sua conta',
         'account.logout': 'Encerrar sessão',
+        'account.emailVerified': 'Email verificado ✅',
+        'account.emailUnverified': 'Verifique seu email para continuar',
+        'account.localSession': 'Sessão local sem verificação',
         'share.title': 'Compartilhar',
-        'share.app': 'Compartilhar Listen AI'
+        'share.app': 'Compartilhar Listen AI',
+        'share.linkCopied': 'Link copiado para compartilhar',
+        'share.error': 'Não foi possível compartilhar neste dispositivo',
+        'share.clipboardError': 'Não foi possível copiar o link',
+        'share.message': 'Veja esta página',
+        'status.guestMode': 'Modo convidado',
+        'status.noSession': 'Sem sessão',
+        'languages.en-US': 'Inglês (EUA)',
+        'languages.en-GB': 'Inglês (Reino Unido)',
+        'languages.es': 'Espanhol',
+        'languages.pt-BR': 'Português (Brasil)',
+        'languages.pt-PT': 'Português (Portugal)',
+        'languages.fr': 'Francês',
+        'languages.it': 'Italiano',
+        'languages.de': 'Alemão',
+        'languages.tr': 'Turco',
+        'languages.zh': 'Chinês simplificado'
       },
       'fr': {
         'appTitle': 'Listen AI Clone',
@@ -1860,14 +1950,45 @@
         'nav.library': 'Ma Bibliothèque',
         'nav.settings': 'Paramètres',
         'settings.preferences': 'Préférences',
+        'settings.voiceCloning': 'Clonage de voix',
+        'settings.googleApi': 'Clé API Google TTS',
+        'settings.googleApi.label': 'Clé API Google TTS :',
+        'settings.googleApi.status.required': '⚠️ Clé API requise',
+        'settings.googleApi.status.configured': 'Configurée',
+        'settings.googleApi.status.unconfigured': 'Non configurée',
+        'settings.firebaseProject': 'Projet Firebase',
+        'settings.firebase.guest': 'Mode invité',
+        'settings.changeVoice': 'Changer de voix',
         'home.banner.title': 'Obtenez un résumé rapide d\'un fichier ou posez n\'importe quelle question à l\'IA',
         'library.title': 'Ma Bibliothèque',
         'settings.title': 'Paramètres',
         'settings.language': 'Langue de l\'application',
+        'settings.language.modalTitle': 'Changer la langue de l\'application',
+        'settings.apiKeys': 'Clés API',
+        'settings.change': 'Changer',
         'account.title': 'Votre compte',
         'account.logout': 'Se déconnecter',
+        'account.emailVerified': 'Email vérifié ✅',
+        'account.emailUnverified': 'Vérifiez votre email pour continuer',
+        'account.localSession': 'Session locale sans vérification',
         'share.title': 'Partager',
-        'share.app': 'Partager Listen AI'
+        'share.app': 'Partager Listen AI',
+        'share.linkCopied': 'Lien copié pour partager',
+        'share.error': 'Impossible de partager sur cet appareil',
+        'share.clipboardError': 'Impossible de copier le lien',
+        'share.message': 'Découvre cette page',
+        'status.guestMode': 'Mode invité',
+        'status.noSession': 'Pas de session',
+        'languages.en-US': 'Anglais (É.-U.)',
+        'languages.en-GB': 'Anglais (R.-U.)',
+        'languages.es': 'Espagnol',
+        'languages.pt-BR': 'Portugais (Brésil)',
+        'languages.pt-PT': 'Portugais (Portugal)',
+        'languages.fr': 'Français',
+        'languages.it': 'Italien',
+        'languages.de': 'Allemand',
+        'languages.tr': 'Turc',
+        'languages.zh': 'Chinois simplifié'
       }
     };
 
@@ -1886,6 +2007,14 @@
 
     function t(key) {
       return TRANSLATIONS[currentLanguage]?.[key] || TRANSLATIONS['es'][key] || key;
+    }
+
+    function getLanguageName(code = currentLanguage, lang = currentLanguage) {
+      const normalizedCode = code || 'es';
+      const baseCode = normalizedCode.split('-')?.[0];
+      return getTranslation(`languages.${normalizedCode}`, lang)
+        || getTranslation(`languages.${baseCode}`, lang)
+        || normalizedCode;
     }
 
     function getTranslation(key, lang = currentLanguage) {
@@ -2125,6 +2254,58 @@
       } else {
         settingsTitle.textContent = t('settings.title');
       }
+
+      const prefTitle = document.querySelector('[data-i18n="settings.preferences"]');
+      if (prefTitle) prefTitle.textContent = t('settings.preferences');
+
+      const voiceCloningLabel = document.querySelector('[data-action="clonacion"] [data-i18n="settings.voiceCloning"]');
+      if (voiceCloningLabel) voiceCloningLabel.textContent = t('settings.voiceCloning');
+
+      const googleApiLabel = document.querySelector('[data-action="config-api"] [data-i18n="settings.googleApi"]');
+      if (googleApiLabel) googleApiLabel.textContent = t('settings.googleApi');
+
+      const firebaseLabel = document.querySelector('[data-action="config-firebase"] [data-i18n="settings.firebaseProject"]');
+      if (firebaseLabel) firebaseLabel.textContent = t('settings.firebaseProject');
+
+      const changeVoiceLabel = document.querySelector('[data-action="cambiar-voz"] [data-i18n="settings.changeVoice"]');
+      if (changeVoiceLabel) changeVoiceLabel.textContent = t('settings.changeVoice');
+
+      const languageLabel = document.querySelector('[data-action="idioma"] [data-i18n="settings.language"]');
+      if (languageLabel) languageLabel.textContent = t('settings.language');
+
+      const languageCurrentLabel = document.getElementById('language-current-label');
+      if (languageCurrentLabel) languageCurrentLabel.textContent = getLanguageName();
+
+      const apiSectionTitle = document.querySelector('[data-i18n="settings.apiKeys"]');
+      if (apiSectionTitle) apiSectionTitle.textContent = t('settings.apiKeys');
+
+      const apiLabel = document.querySelector('[data-i18n="settings.googleApi.label"]');
+      if (apiLabel) apiLabel.textContent = t('settings.googleApi.label');
+
+      const apiChangeBtn = document.querySelector('#api-key-settings [data-i18n="settings.change"]');
+      if (apiChangeBtn) apiChangeBtn.textContent = t('settings.change');
+
+      updateApiKeySettingsUI();
+      updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (isFirebaseAvailable() ? t('settings.googleApi.status.configured') : null));
+
+      const accountTitle = document.querySelector('[data-i18n="account.title"]');
+      if (accountTitle) accountTitle.textContent = t('account.title');
+
+      const logoutButton = document.querySelector('#logout-action');
+      if (logoutButton) logoutButton.textContent = t('account.logout');
+
+      const shareTitle = document.querySelector('[data-i18n="share.title"]');
+      if (shareTitle) shareTitle.textContent = t('share.title');
+
+      const shareApp = document.querySelector('[data-i18n="share.app"]');
+      if (shareApp) shareApp.textContent = t('share.app');
+
+      const languageModalTitle = document.querySelector('#language-modal [data-i18n="settings.language.modalTitle"]');
+      if (languageModalTitle) languageModalTitle.textContent = t('settings.language.modalTitle');
+
+      if (typeof updateAccountInfo === 'function') {
+        updateAccountInfo(currentUser);
+      }
     }
 
     function cambiarIdioma(nuevoIdioma) {
@@ -2143,16 +2324,16 @@
       languageList.innerHTML = '';
 
       const idiomas = [
-        { code: 'en-US', nombre: 'Inglés (EE.UU) - en-US', flag: '🇺🇸' },
-        { code: 'en-GB', nombre: 'Inglés (Reino Unido) - en-GB', flag: '🇬🇧' },
-        { code: 'es', nombre: 'Español - es', flag: '🇪🇸' },
-        { code: 'pt-BR', nombre: 'Brasileño - pt-BR', flag: '🇧🇷' },
-        { code: 'pt-PT', nombre: 'Portugués - pt-PT', flag: '🇵🇹' },
-        { code: 'fr', nombre: 'Francés - fr', flag: '🇫🇷' },
-        { code: 'it', nombre: 'Italiano - it', flag: '🇮🇹' },
-        { code: 'de', nombre: 'Alemán - de', flag: '🇩🇪' },
-        { code: 'tr', nombre: 'Turco - tr', flag: '🇹🇷' },
-        { code: 'zh', nombre: 'Chino simplificado - zh', flag: '🇨🇳' }
+        { code: 'en-US', flag: '🇺🇸' },
+        { code: 'en-GB', flag: '🇬🇧' },
+        { code: 'es', flag: '🇪🇸' },
+        { code: 'pt-BR', flag: '🇧🇷' },
+        { code: 'pt-PT', flag: '🇵🇹' },
+        { code: 'fr', flag: '🇫🇷' },
+        { code: 'it', flag: '🇮🇹' },
+        { code: 'de', flag: '🇩🇪' },
+        { code: 'tr', flag: '🇹🇷' },
+        { code: 'zh', flag: '🇨🇳' }
       ];
 
       idiomas.forEach((idioma) => {
@@ -2162,10 +2343,11 @@
           item.classList.add('activo');
         }
 
+        const languageName = `${getLanguageName(idioma.code)} - ${idioma.code}`;
         item.innerHTML = `
           <span style="font-size: 32px; margin-right: 12px;">${idioma.flag}</span>
           <div style="display:flex; flex-direction:column; gap:2px;">
-            <span style="font-weight:800;">${idioma.nombre}</span>
+            <span style="font-weight:800;">${languageName}</span>
             <small style="color:#666;">${idioma.code}</small>
           </div>
         `;
@@ -3265,15 +3447,15 @@
       }
     }
 
-    function showMainApp() {
-      if (authScreen) authScreen.style.display = 'none';
-      if (appContainer) appContainer.style.display = 'block';
-      switchPage('home');
-      if (isGuestMode) {
-        updateAccountInfo(null);
-        updateFirebaseStatusLabel('Modo invitado');
+      function showMainApp() {
+        if (authScreen) authScreen.style.display = 'none';
+        if (appContainer) appContainer.style.display = 'block';
+        switchPage('home');
+        if (isGuestMode) {
+          updateAccountInfo(null);
+          updateFirebaseStatusLabel(t('settings.firebase.guest'));
+        }
       }
-    }
 
     function toggleAuthForms(showSignup) {
       if (!loginForm || !signupForm) return;
@@ -3342,15 +3524,15 @@
     }
 
     function updateAccountInfo(user) {
-      const emailText = isGuestMode ? 'Modo invitado' : (user?.email || 'Sin sesión');
+      const emailText = isGuestMode ? t('status.guestMode') : (user?.email || t('status.noSession'));
       if (userEmailDisplay) userEmailDisplay.textContent = emailText;
       if (emailVerifiedBadge) {
         const verified = user?.emailVerified;
         emailVerifiedBadge.textContent = isGuestMode
-          ? 'Sesión local sin verificación'
+          ? t('account.localSession')
           : verified
-            ? 'Email verificado ✅'
-            : 'Verifica tu email para continuar';
+            ? t('account.emailVerified')
+            : t('account.emailUnverified');
         emailVerifiedBadge.style.color = verified ? '#1B8E5A' : '#C0392B';
       }
     }
@@ -3888,16 +4070,16 @@
         });
       }
 
-      if (guestButton) {
-        guestButton.addEventListener('click', () => {
-          authError.style.display = 'none';
-          authSuccess.style.display = 'none';
-          setGuestMode(true);
-          updateFirebaseStatusLabel('Modo invitado');
-          updateAccountInfo(null);
-          showMainApp();
-        });
-      }
+        if (guestButton) {
+          guestButton.addEventListener('click', () => {
+            authError.style.display = 'none';
+            authSuccess.style.display = 'none';
+            setGuestMode(true);
+            updateFirebaseStatusLabel(t('settings.firebase.guest'));
+            updateAccountInfo(null);
+            showMainApp();
+          });
+        }
 
       if (forgotPassword) {
         forgotPassword.addEventListener('click', async (e) => {
@@ -4299,19 +4481,21 @@
           icon.textContent = '✓';
           icon.style.color = '#34C759';
           icon.classList.remove('blink-danger');
-          btnApiStatus.title = 'API Key configurada ✓';
+          btnApiStatus.title = `${t('settings.googleApi')} ✓`;
         } else {
           btnApiStatus.style.borderColor = '#FF3B30';
           btnApiStatus.style.background = '#FFEBEA';
           icon.textContent = '⚠';
           icon.style.color = '#FF3B30';
           icon.classList.add('blink-danger');
-          btnApiStatus.title = 'Configurar API Key';
+          btnApiStatus.title = t('settings.googleApi.status.required');
         }
       }
 
       if (apiLabel) {
-        apiLabel.textContent = isValidKey && apiKey ? 'Configurada' : '⚠️ API Key requerida';
+        apiLabel.textContent = isValidKey && apiKey
+          ? t('settings.googleApi.status.configured')
+          : t('settings.googleApi.status.required');
         apiLabel.style.color = isValidKey && apiKey ? '#1A1A1A' : '#FF3B30';
       }
 
@@ -4327,7 +4511,7 @@
       }
 
       if (currentKeyInput) {
-        currentKeyInput.textContent = userGoogleTTSKey ? '************' : 'Sin configurar';
+        currentKeyInput.textContent = userGoogleTTSKey ? '************' : t('settings.googleApi.status.unconfigured');
       }
     }
 
@@ -4366,7 +4550,8 @@
     function updateFirebaseStatusLabel(value) {
       const label = document.getElementById('firebase-status-label');
       if (label) {
-        const displayValue = isGuestMode ? 'Modo invitado' : (value || 'Sin configurar');
+        const normalizedValue = value === 'Listo' ? t('settings.googleApi.status.configured') : value;
+        const displayValue = isGuestMode ? t('settings.firebase.guest') : (normalizedValue || t('settings.googleApi.status.unconfigured'));
         label.textContent = displayValue;
         const available = !isGuestMode && firebaseAppInitialized;
         label.style.color = available ? '#1A1A1A' : '#FF3B30';
@@ -5915,13 +6100,27 @@
     document.querySelectorAll('[data-action="compartir"]').forEach((el) => {
       el.dataset.shareTarget = 'page';
       el.addEventListener('click', () => {
-        const sharePayload = { title: 'Listen AI', text: 'Mira esta página', url: location.href };
+        const sharePayload = {
+          title: getTranslation('appTitle'),
+          text: getTranslation('share.message'),
+          url: SHARE_APP_URL
+        };
+
+        const copyToClipboard = () => {
+          if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(sharePayload.url)
+              .then(() => mostrarPopupExito(t('share.linkCopied')))
+              .catch(() => mostrarPopupError(t('share.clipboardError')));
+          } else {
+            mostrarPopupError(t('share.clipboardError'));
+          }
+        };
+
         if (navigator.share) {
-          navigator.share(sharePayload).catch(() => mostrarPopupError('No se pudo compartir en este dispositivo'));
+          navigator.share(sharePayload)
+            .catch(() => copyToClipboard());
         } else {
-          navigator.clipboard.writeText(sharePayload.url)
-            .then(() => mostrarPopupExito('Enlace copiado para compartir'))
-            .catch(() => mostrarPopupError('No se pudo copiar el enlace'));
+          copyToClipboard();
         }
       });
     });
@@ -5946,7 +6145,7 @@
 
         bindCardEvents();
         setupAuthListeners();
-        updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (isFirebaseAvailable() ? 'Listo' : 'Sin configurar'));
+        updateFirebaseStatusLabel(firebaseConfigInUse?.projectId || (isFirebaseAvailable() ? t('settings.googleApi.status.configured') : null));
         if (isFirebaseAvailable()) {
           initializeAuthWatcher();
           createTestAccount();
