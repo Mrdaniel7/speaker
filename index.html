@@ -1537,6 +1537,10 @@
 
   <script type="module">
     let userGoogleTTSKey = null;
+    const apiKeySetupModal = document.getElementById('api-key-setup-modal');
+    if (apiKeySetupModal) {
+      apiKeySetupModal.style.display = 'none';
+    }
     const DEBUG_MODE = localStorage.getItem('debugMode') === 'true';
     const FIREBASE_CONFIG_STORAGE_KEY = 'listen_ai_firebase_config_v1';
     const GUEST_MODE_KEY = 'isGuestMode';
@@ -3948,6 +3952,7 @@
           userGoogleTTSKey = null;
           updateApiKeySettingsUI();
           showLoginScreen('Inicia sesión para continuar');
+          await verificarYMostrarPopupAPIKey();
         }
       });
     }
@@ -4181,27 +4186,53 @@
     };
 
     async function verificarYMostrarPopupAPIKey() {
+      console.log('1️⃣ Iniciando verificación de API key');
+
+      if (apiKeySetupModal) {
+        apiKeySetupModal.style.display = 'none';
+      }
+
       const user = firebase?.auth?.()?.currentUser;
-      if (!user) return;
+      if (!user) {
+        console.log('👤 Sin usuario autenticado, mostrar popup');
+        mostrarPopupAPIKey();
+        return;
+      }
 
       try {
+        console.log('2️⃣ Usuario autenticado:', user.uid);
         const docRef = firebase.firestore().collection('users').doc(user.uid);
         const doc = await docRef.get();
+        console.log('3️⃣ Documento Firebase:', doc.exists);
+        const data = doc.data() || {};
+        const firebaseKey = data.googleTTSKey;
+        console.log('4️⃣ googleTTSKey en Firebase:', firebaseKey);
 
-        if (doc.exists && doc.data().googleTTSKey) {
-          console.log('API key ya configurada, no mostrar popup');
+        if (firebaseKey && firebaseKey.length > 0) {
+          console.log('✅ API key encontrada en Firebase, NO mostrar popup');
+          userGoogleTTSKey = firebaseKey;
+          actualizarEstadoAPIKeyUI(true);
+          setVoiceSystem('google');
+          updateApiKeySettingsUI();
           return;
         }
 
-        const localKey = localStorage.getItem('googleTTSKey');
+        const localKey = localStorage.getItem('googleTTSKey') || getGuestAPIKey();
         if (localKey && localKey.length > 0) {
-          console.log('API key en localStorage, no mostrar popup');
+          console.log('✅ API key encontrada en localStorage, NO mostrar popup');
+          userGoogleTTSKey = localKey;
+          actualizarEstadoAPIKeyUI(true);
+          setVoiceSystem('google');
+          updateApiKeySettingsUI();
           return;
         }
 
+        console.log('❌ No se encontró API key, MOSTRAR popup');
+        actualizarEstadoAPIKeyUI(false);
         mostrarPopupAPIKey();
       } catch (error) {
-        console.warn('No se pudo verificar la API Key antes de mostrar el popup', error);
+        console.error('Error verificando API key:', error);
+        mostrarPopupAPIKey();
       }
     }
 
@@ -4417,144 +4448,27 @@
     }
 
     function mostrarPopupAPIKey(force = false) {
-      const skipAPIKey = currentUser?.uid
-        ? localStorage.getItem(`skipAPIKey_${currentUser.uid}`) === 'true'
-        : false;
+      const skipAPIKey = hasAPIKeySkipPreference();
       const storedKey = getStoredApiKey();
-      const existingModal = document.getElementById('api-key-modal');
-      if (existingModal) existingModal.remove();
 
       if (!force && (skipAPIKey || storedKey)) {
         logDebug('ℹ️ Modal API Key omitido', { skipAPIKey, tieneAPI: !!storedKey });
         return;
       }
 
-      const popup = document.createElement('div');
-      popup.className = 'modal-overlay active';
-      popup.id = 'api-key-modal';
-      popup.style.zIndex = '9999';
+      const modal = document.getElementById('api-key-setup-modal');
+      const input = document.getElementById('google-tts-api-key-input');
 
-      popup.innerHTML = `
-        <div class="modal-api-key">
-          <div class="api-header">
-            <div class="api-icon">🎙️</div>
-            <h2>Voces Naturales con IA</h2>
-            <p class="api-subtitle">
-              Esta aplicación usa Google Cloud Text-to-Speech para generar
-              voces ultra-naturales y realistas.
-            </p>
-          </div>
-          <div class="api-benefits">
-            <div class="benefit-item">
-              <span class="benefit-icon">✅</span>
-              <span>Totalmente <strong>GRATIS</strong></span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">🎯</span>
-              <span><strong>1 millón</strong> de caracteres/mes</span>
-            </div>
-            <div class="benefit-item">
-              <span class="benefit-icon">🔒</span>
-              <span>Sin tarjeta de crédito</span>
-            </div>
-          </div>
-          <div class="api-input-section">
-            <label for="api-key-input">API Key de Google Cloud:</label>
-            <div class="input-wrapper">
-              <input
-                type="password"
-                id="api-key-input"
-                placeholder="AIzaSy..."
-                autocomplete="off"
-              />
-              <button type="button" id="toggle-visibility" class="toggle-btn">👁️</button>
-            </div>
-            <span class="error-message" id="api-error" style="display:none;">
-              ❌ API Key inválida. Verifica e intenta de nuevo.
-            </span>
-          </div>
-          <div class="api-help">
-            <p>¿No tienes una API Key?</p>
-            <a
-              href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com"
-              target="_blank"
-              class="btn-get-api"
-            >
-              📖 Obtener API Key (guía paso a paso)
-            </a>
-          </div>
-          <div class="api-actions">
-            <button id="validate-api-btn" class="btn-primary">Validar y Continuar</button>
-            <button id="skip-api-btn" class="btn-secondary">Omitir (usar voces del sistema)</button>
-          </div>
-          <div class="api-loading" id="api-loading" style="display:none;">
-            <div class="spinner"></div>
-            <p>Validando API Key...</p>
-          </div>
-        </div>
-      `;
+      if (input && userGoogleTTSKey) {
+        input.value = userGoogleTTSKey;
+      }
 
-      document.body.appendChild(popup);
-
-      const input = document.getElementById('api-key-input');
-      const validateBtn = document.getElementById('validate-api-btn');
-      const skipBtn = document.getElementById('skip-api-btn');
-      const toggleBtn = document.getElementById('toggle-visibility');
-      const errorMsg = document.getElementById('api-error');
-
-      input.value = storedKey || '';
-
-      let isVisible = false;
-      toggleBtn.addEventListener('click', () => {
-        isVisible = !isVisible;
-        input.type = isVisible ? 'text' : 'password';
-        toggleBtn.textContent = isVisible ? '🙈' : '👁️';
-      });
-
-      validateBtn.addEventListener('click', async () => {
-        const apiKey = input.value.trim();
-
-        if (!apiKey) {
-          mostrarError('Por favor ingresa una API Key');
-          return;
-        }
-
-        toggleApiLoading(true, popup);
-        errorMsg.style.display = 'none';
-
-        const { valid, message } = await validarAPIKey(apiKey);
-
-        toggleApiLoading(false, popup);
-
-        if (valid) {
-          await setStoredApiKey(apiKey);
-          actualizarEstadoAPIKeyUI(true);
-          mostrarPopupExito('✅ API Key configurada correctamente');
-          popup.remove();
-          toggleOverlay(false);
-        } else {
-          mostrarError(message || 'API Key inválida o sin permisos. Verifica y prueba de nuevo.');
-          input.select();
-        }
-      });
-
-      skipBtn.addEventListener('click', () => {
-        const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser.uid}` : 'skipAPIKey_guest';
-        localStorage.setItem(skipKey, 'true');
-        console.log('⏭️ Usuario eligió usar voces del sistema');
-        closeModals();
-        popup.remove();
-        toggleOverlay(false);
-        actualizarEstadoAPIKeyUI(false);
-      });
-
-      function mostrarError(mensaje) {
-        errorMsg.textContent = mensaje;
-        errorMsg.style.display = 'block';
-        input.classList.add('input-error');
-        setTimeout(() => {
-          input.classList.remove('input-error');
-        }, 600);
+      if (modal) {
+        modal.style.display = 'flex';
+        toggleOverlay(true);
+        console.log('🔑 Mostrando popup de API key');
+      } else {
+        console.warn('❗ Modal de API Key no encontrado');
       }
     }
 
@@ -4585,6 +4499,11 @@
     }
 
     async function inicializarAPIKey() {
+      if (isFirebaseAvailable() && !authInitialized && !isGuestMode) {
+        logDebug('⏳ Esperando autenticación antes de validar API Key');
+        return false;
+      }
+
       const skipAPIKey = isGuestMode
         ? localStorage.getItem(GUEST_SKIP_API_KEY_KEY) === 'true'
         : localStorage.getItem(`skipAPIKey_${currentUser?.uid}`) === 'true';
