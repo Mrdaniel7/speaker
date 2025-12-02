@@ -141,6 +141,11 @@
     .auth-success { background: #E7F9EF; color: #1B8E5A; padding: 12px; border-radius: 12px; border: 1px solid #C9F0D7; font-weight: 600; display: none; }
     .remember-me { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--texto-gris); }
     .auth-loader { width: 16px; height: 16px; border: 3px solid #fff; border-top-color: rgba(255,255,255,0.2); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    .password-input-wrapper { display: flex; align-items: center; gap: 8px; border: 1.5px solid #E5E5E5; border-radius: 12px; padding: 0 10px; }
+    .password-input-wrapper input { border: none; flex: 1; padding: 12px 0; font-size: 16px; }
+    .password-input-wrapper input:focus { outline: none; }
+    .toggle-password { border: none; background: transparent; cursor: pointer; font-size: 16px; }
+    .password-field label { display: block; font-weight: 700; font-size: 14px; color: var(--texto-gris); margin-bottom: 6px; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity:1; transform: translateY(0);} }
@@ -378,6 +383,8 @@
     .config-item span { font-size: 16px; font-weight: 600; }
     .valor-actual, .flecha { margin-left: auto; color: #666; font-size: 14px; font-weight: 600; }
     .cuenta-item { display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--borde-gris); }
+    .cuenta-resumen { gap: 12px; cursor: default; }
+    .cuenta-resumen .btn-desconectar { margin-left: auto; background: #FFE8E6; border: 1px solid #FADBD8; color: #C0392B; padding: 8px 14px; border-radius: 12px; cursor: pointer; font-weight: 700; }
     .icono-servicio { width: 28px; height: 28px; }
     .btn-desconectar { margin-left: auto; background: #FF3B30; color: #fff; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 6px 12px rgba(255,59,48,0.22); }
     .descripcion-cuenta { color: var(--texto-gris); font-size: 14px; padding: 0 12px 12px; }
@@ -1000,17 +1007,26 @@
           <label for="signup-email">Email</label>
           <input type="email" id="signup-email" placeholder="tu@email.com" required />
         </div>
-        <div>
+        <div class="password-field">
           <label for="signup-password">Contraseña</label>
-          <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" minlength="6" required />
+          <div class="password-input-wrapper">
+            <input type="password" id="signup-password" placeholder="Mínimo 6 caracteres" minlength="6" required />
+            <button type="button" class="toggle-password" data-target="signup-password" aria-label="Mostrar u ocultar contraseña">👁️</button>
+          </div>
         </div>
-        <div>
+        <div class="password-field">
           <label for="signup-confirm">Confirmar contraseña</label>
-          <input type="password" id="signup-confirm" placeholder="Repite tu contraseña" minlength="6" required />
+          <div class="password-input-wrapper">
+            <input type="password" id="signup-confirm" placeholder="Repite tu contraseña" minlength="6" required />
+            <button type="button" class="toggle-password" data-target="signup-confirm" aria-label="Mostrar u ocultar contraseña">👁️</button>
+          </div>
         </div>
-        <div>
+        <div class="password-field">
           <label for="signup-api-key">API Key de Google TTS (opcional)</label>
-          <input type="password" id="signup-api-key" placeholder="Puedes agregarla ahora o después" />
+          <div class="password-input-wrapper">
+            <input type="password" id="signup-api-key" placeholder="Puedes agregarla ahora o después" />
+            <button type="button" class="toggle-password" data-target="signup-api-key" aria-label="Mostrar u ocultar API Key">👁️</button>
+          </div>
         </div>
         <button type="submit" class="auth-button" id="signup-button">Crear Cuenta</button>
       </form>
@@ -1186,7 +1202,7 @@
       <section id="settings" class="page">
         <div class="settings-page">
           <section class="config-seccion">
-            <h3 class="titulo-seccion">Preferencias</h3>
+            <h3 class="titulo-seccion" data-i18n="settings.preferences">Preferencias</h3>
             <div class="config-item" data-action="clonacion">
               <div class="icono-config">🎙️</div>
               <span>Clonación de Voz</span>
@@ -1231,57 +1247,34 @@
             </div>
           </section>
 
-        <section class="config-seccion">
-          <h3 class="titulo-seccion">Tu cuenta</h3>
-          <div class="config-item">
-            <div class="icono-config">📧</div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <span id="user-email-display">Sin sesión</span>
-              <small id="email-verified-badge" style="color:#666; font-weight:600;">Email no verificado</small>
+          <section class="config-seccion">
+            <h3 class="titulo-seccion" data-i18n="account.title">Tu cuenta</h3>
+            <div class="config-item cuenta-resumen">
+              <div class="icono-config">📧</div>
+              <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                <span id="user-email-display">Sin sesión</span>
+                <small id="email-verified-badge" style="color:#666; font-weight:600;">Email no verificado</small>
+              </div>
+              <button class="btn-desconectar" id="logout-action" data-i18n="account.logout">Cerrar Sesión</button>
             </div>
-          </div>
-          <div class="config-item" id="logout-action">
-            <div class="icono-config" style="background:#FFE8E6; color:#C0392B;">🚪</div>
-            <span style="color:#C0392B;">Cerrar Sesión</span>
-            <span class="flecha">›</span>
-          </div>
-        </section>
+          </section>
 
         <section class="config-seccion">
-          <h3 class="titulo-seccion">Cuentas vinculadas</h3>
-          <div class="cuenta-item">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="icono-servicio" alt="Google" />
-            <span>Google</span>
-            <button class="btn-desconectar">Desconectar</button>
-          </div>
-          <p class="descripcion-cuenta">Conecta tus cuentas y convierte tus archivos y correos en audio.</p>
-        </section>
-
-        <section class="config-seccion">
-          <h3 class="titulo-seccion">Compartir</h3>
+          <h3 class="titulo-seccion" data-i18n="share.title">Compartir</h3>
           <div class="config-item" data-action="compartir">
             <div class="icono-config">📤</div>
-            <span>Compartir Listen AI</span>
-            <span class="flecha">›</span>
-          </div>
-        </section>
-
-        <section class="config-seccion">
-          <h3 class="titulo-seccion">Soporte</h3>
-          <div class="config-item" data-action="calificar">
-            <div class="icono-config">❤️</div>
-            <span>¿Te gusta? Califícanos</span>
-            <span class="flecha">›</span>
-          </div>
-          <div class="config-item" data-action="ayuda">
-            <div class="icono-config">💬</div>
-            <span>Soporte y ayuda</span>
+            <span data-i18n="share.app">Compartir Listen AI</span>
             <span class="flecha">›</span>
           </div>
         </section>
       </div>
     </section>
   </div>
+
+  <section class="config-seccion" id="feature-checklist" style="display:none;">
+    <h3 class="titulo-seccion">Checklist de pruebas</h3>
+    <ul id="feature-checklist-list" style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px;"></ul>
+  </section>
 
   <div class="text-config-overlay" id="text-config-overlay"></div>
   <aside class="text-config-panel" id="text-config-panel" role="dialog" aria-modal="true" aria-labelledby="text-config-title">
@@ -1792,6 +1785,7 @@
         'nav.home': 'Inicio',
         'nav.library': 'Mi Biblioteca',
         'nav.settings': 'Configuraciones',
+        'settings.preferences': 'Preferencias',
         'home.banner.title': 'Obtén un resumen rápido de un archivo o pregunta al AI cualquier cosa',
         'home.section.title': '¿Qué quieres escuchar hoy?',
         'home.document.title': 'Documento',
@@ -1810,7 +1804,11 @@
         'library.tab.finished': 'Finalizado',
         'library.tab.favorites': 'Favoritos',
         'settings.title': 'Configuraciones',
-        'settings.language': 'Idioma de la aplicación'
+        'settings.language': 'Idioma de la aplicación',
+        'account.title': 'Tu cuenta',
+        'account.logout': 'Cerrar Sesión',
+        'share.title': 'Compartir',
+        'share.app': 'Compartir Listen AI'
       },
       'en': {
         'appTitle': 'Listen AI Clone',
@@ -1818,6 +1816,7 @@
         'nav.home': 'Home',
         'nav.library': 'My Library',
         'nav.settings': 'Settings',
+        'settings.preferences': 'Preferences',
         'home.banner.title': 'Get a quick summary of a file or ask AI anything',
         'home.section.title': 'What do you want to listen to today?',
         'home.document.title': 'Document',
@@ -1836,7 +1835,11 @@
         'library.tab.finished': 'Finished',
         'library.tab.favorites': 'Favorites',
         'settings.title': 'Settings',
-        'settings.language': 'App Language'
+        'settings.language': 'App Language',
+        'account.title': 'Your account',
+        'account.logout': 'Sign out',
+        'share.title': 'Share',
+        'share.app': 'Share Listen AI'
       },
       'pt': {
         'appTitle': 'Listen AI Clone',
@@ -1844,11 +1847,16 @@
         'nav.home': 'Início',
         'nav.library': 'Minha Biblioteca',
         'nav.settings': 'Configurações',
+        'settings.preferences': 'Preferências',
         'home.banner.title': 'Obtenha um resumo rápido de um arquivo ou pergunte qualquer coisa à IA',
         'home.section.title': 'O que você quer ouvir hoje?',
         'library.title': 'Minha Biblioteca',
         'settings.title': 'Configurações',
-        'settings.language': 'Idioma do aplicativo'
+        'settings.language': 'Idioma do aplicativo',
+        'account.title': 'Sua conta',
+        'account.logout': 'Encerrar sessão',
+        'share.title': 'Compartilhar',
+        'share.app': 'Compartilhar Listen AI'
       },
       'fr': {
         'appTitle': 'Listen AI Clone',
@@ -1856,10 +1864,15 @@
         'nav.home': 'Accueil',
         'nav.library': 'Ma Bibliothèque',
         'nav.settings': 'Paramètres',
+        'settings.preferences': 'Préférences',
         'home.banner.title': 'Obtenez un résumé rapide d\'un fichier ou posez n\'importe quelle question à l\'IA',
         'library.title': 'Ma Bibliothèque',
         'settings.title': 'Paramètres',
-        'settings.language': 'Langue de l\'application'
+        'settings.language': 'Langue de l\'application',
+        'account.title': 'Votre compte',
+        'account.logout': 'Se déconnecter',
+        'share.title': 'Partager',
+        'share.app': 'Partager Listen AI'
       }
     };
 
@@ -2820,6 +2833,7 @@
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const store = tx.objectStore('documentos');
+      const defaultVoice = doc.vozSeleccionada || doc.voz || vozSeleccionada || localStorage.getItem('vozSeleccionada') || 'Sasha';
       const payload = {
         ...doc,
         id: doc.id || generateId(),
@@ -2827,7 +2841,7 @@
         estado: doc.estado || 'todo',
         favorito: !!doc.favorito,
         posicionReproduccion: doc.posicionReproduccion || 0,
-        vozSeleccionada: doc.vozSeleccionada || doc.voz || 'Sasha',
+        vozSeleccionada: defaultVoice,
         velocidad: doc.velocidad || doc.speed || 1.0,
       };
       const req = store.put(payload);
@@ -3899,6 +3913,16 @@
           await resetPassword(email);
         });
       }
+
+      document.querySelectorAll('.toggle-password').forEach((btn) => {
+        const target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        btn.addEventListener('click', () => {
+          const isHidden = target.type === 'password';
+          target.type = isHidden ? 'text' : 'password';
+          btn.textContent = isHidden ? '🙈' : '👁️';
+        });
+      });
 
       if (logoutAction) {
         logoutAction.addEventListener('click', () => {
@@ -5333,13 +5357,17 @@
     });
 
     shareBtn?.addEventListener('click', async () => {
-      if (!documentoActivo) return;
+      const sharePayload = { title: 'Listen AI', text: documentoActivo?.titulo || 'Mira esta página', url: location.href };
       try {
-        await navigator.clipboard.writeText(documentoActivo.texto || '');
-        mostrarPopupExito('Texto copiado para compartir.');
+        if (navigator.share) {
+          await navigator.share(sharePayload);
+        } else {
+          await navigator.clipboard.writeText(sharePayload.url);
+        }
+        mostrarPopupExito('Página lista para compartir.');
       } catch (error) {
-        console.warn('No se pudo copiar el texto', error);
-        mostrarPopupError('No pudimos copiar el contenido para compartir.');
+        console.warn('No se pudo compartir', error);
+        mostrarPopupError('No pudimos compartir la página.');
       }
     });
 
@@ -5417,8 +5445,13 @@
       playerTitle.textContent = doc.titulo;
       highlightTexto(doc.texto);
       setSpeed(doc.velocidad || velocidadActual);
-      vozSeleccionada = doc.vozSeleccionada || vozSeleccionada;
+      const preferredVoice = doc.vozSeleccionada || vozSeleccionada || localStorage.getItem('vozSeleccionada') || 'Sasha';
+      vozSeleccionada = preferredVoice;
+      updateVoiceLabels(vozSeleccionada);
       actualizarAvatarVoz(vozSeleccionada);
+      if (!doc.vozSeleccionada && doc.id) {
+        updateDocumento(doc.id, { vozSeleccionada });
+      }
       switchPage('player');
     }
 
@@ -5426,7 +5459,7 @@
       documentoActivo = doc;
       docMenuTitle.textContent = doc.titulo;
       docMenuType.textContent = doc.tipo;
-      docVoiceLabel.textContent = doc.vozSeleccionada;
+      docVoiceLabel.textContent = doc.vozSeleccionada || vozSeleccionada;
       docPreview.src = doc.miniatura || 'https://placehold.co/60x60';
       openModal(docMenu);
     }
@@ -5456,14 +5489,14 @@
           abrirModalEdicion(documentoActivo);
         }
         if (action === 'share') {
-          const contenido = `${documentoActivo.titulo}\n\n${documentoActivo.texto.substring(0, 800)}...\n${location.href}`;
+          const sharePayload = { title: documentoActivo.titulo, text: 'Escucha este documento en Listen AI', url: location.href };
           if (navigator.share) {
-            navigator.share({ title: documentoActivo.titulo, text: contenido, url: location.href })
+            navigator.share(sharePayload)
               .catch(() => mostrarPopupError('No se pudo compartir en este dispositivo'));
           } else {
-            navigator.clipboard.writeText(contenido)
-              .then(() => mostrarPopupExito('Texto copiado para compartir'))
-              .catch(() => mostrarPopupError('No se pudo copiar el contenido'));
+            navigator.clipboard.writeText(sharePayload.url)
+              .then(() => mostrarPopupExito('Enlace copiado para compartir'))
+              .catch(() => mostrarPopupError('No se pudo copiar el enlace de la página'));
           }
         }
         if (action === 'notas') {
@@ -5877,28 +5910,80 @@
 
     document.querySelectorAll('[data-action="clonacion"]').forEach((el) => el.addEventListener('click', abrirClonacionVoz));
 
-    document.querySelectorAll('[data-action="compartir"]').forEach((el) => el.addEventListener('click', () => {
-      navigator.share ? navigator.share({ title: 'Listen AI', text: 'Prueba este clon de Listen AI', url: location.href }) : mostrarPopupError('Compartir no soportado');
-    }));
-
-    document.querySelectorAll('[data-action="calificar"]').forEach((el) => el.addEventListener('click', () => {
-      console.log('⭐ Acción de calificar activada');
-      mostrarPopupExito('¡Gracias por calificarnos! ⭐⭐⭐⭐⭐');
-    }));
-
-    document.querySelectorAll('[data-action="ayuda"]').forEach((el) => el.addEventListener('click', () => {
-      console.log('💬 Abriendo soporte y ayuda');
-      mostrarPopupConfirmacion('Soporte', 'Abriremos la sección de ayuda en tu navegador. ¿Continuar?', () => {
-        window.open('https://support.google.com/', '_blank');
+    document.querySelectorAll('[data-action="compartir"]').forEach((el) => {
+      el.dataset.shareTarget = 'page';
+      el.addEventListener('click', () => {
+        const sharePayload = { title: 'Listen AI', text: 'Mira esta página', url: location.href };
+        if (navigator.share) {
+          navigator.share(sharePayload).catch(() => mostrarPopupError('No se pudo compartir en este dispositivo'));
+        } else {
+          navigator.clipboard.writeText(sharePayload.url)
+            .then(() => mostrarPopupExito('Enlace copiado para compartir'))
+            .catch(() => mostrarPopupError('No se pudo copiar el enlace'));
+        }
       });
-    }));
+    });
 
     document.querySelectorAll('.btn-desconectar').forEach((btn) => btn.addEventListener('click', () => {
       console.log('🔌 Solicitud de desconexión de cuenta');
-      mostrarPopupConfirmacion('Desconectar cuenta', '¿Quieres desconectar tu cuenta de Google?', () => {
-        mostrarPopupExito('Cuenta de Google desconectada');
+      mostrarPopupConfirmacion('Cerrar Sesión', '¿Quieres desconectar tu cuenta?', () => {
+        logoutUser();
       });
     }));
+
+    function renderChecklist(items = []) {
+      const checklist = document.getElementById('feature-checklist');
+      const list = document.getElementById('feature-checklist-list');
+      if (!checklist || !list) return;
+      list.innerHTML = '';
+      items.forEach((item) => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '8px';
+        li.innerHTML = `${item.pass ? '✅' : '⚠️'} <strong>${item.label}</strong><span style="color:#666; font-size:13px;">${item.detail || ''}</span>`;
+        list.appendChild(li);
+      });
+      checklist.style.display = 'block';
+    }
+
+    function runFeatureChecklist() {
+      const results = [];
+      const storedVoice = localStorage.getItem('vozSeleccionada') || vozSeleccionada;
+      results.push({
+        label: 'Preferencia de voz persistente',
+        pass: !!storedVoice && storedVoice === vozSeleccionada,
+        detail: `Voz actual: ${vozSeleccionada}`
+      });
+
+      const prefTitle = document.querySelector('[data-i18n="settings.preferences"]');
+      results.push({
+        label: 'Cambio de idioma solo en la interfaz',
+        pass: prefTitle?.textContent === getTranslation('settings.preferences', currentLanguage),
+        detail: `lang=${document.documentElement.lang}`
+      });
+
+      const shareAction = document.querySelector('[data-action="compartir"]');
+      results.push({
+        label: 'Compartir página',
+        pass: !!shareAction && shareAction.dataset.shareTarget === 'page',
+        detail: 'Se comparte la URL actual'
+      });
+
+      results.push({
+        label: 'Soporte oculto',
+        pass: !document.querySelector('[data-action="ayuda"]'),
+        detail: 'Sin accesos a soporte/ayuda'
+      });
+
+      results.push({
+        label: 'Ver contraseña al registrarse',
+        pass: !!document.querySelector('.toggle-password'),
+        detail: 'Botón de mostrar/ocultar disponible'
+      });
+
+      renderChecklist(results);
+    }
 
       window.addEventListener('DOMContentLoaded', async () => {
         // ✅ FORZAR PÁGINA INICIAL
@@ -5978,6 +6063,7 @@
 
       // Inicializar textos en el idioma actual
       updateUITranslations(currentLanguage);
+      runFeatureChecklist();
       console.log('✅ Idioma inicializado:', currentLanguage);
     });
   </script>
