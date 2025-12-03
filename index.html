@@ -18,7 +18,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <style>
     :root {
       --amarillo-principal: #FFB800;
@@ -5025,7 +5024,7 @@
     const clonedVoice = getLocalClonedVoice();
     if (clonedVoice) {
       try {
-        upsertClonedVoiceConfig(clonedVoice);
+        applyClonedVoiceConfig(clonedVoice).catch((error) => console.error('❌ Error aplicando voz clonada local:', error));
         console.log('✅ Voz clonada restaurada:', clonedVoice.nombre);
       } catch (e) {
         console.error('❌ Error cargando voz clonada:', e);
@@ -5211,10 +5210,155 @@
       }
     }
 
-    function applyClonedVoiceConfig(voiceData) {
-      if (!voiceData) return;
+    const VOICES_DB_NAME = 'ListenAI_VoicesDB';
+    const VOICES_DB_VERSION = 1;
+    const CLONED_VOICES_STORE = 'clonedVoices';
+    let voicesDBPromise = null;
+
+    function initVoicesDB() {
+      if (voicesDBPromise) return voicesDBPromise;
+
+      voicesDBPromise = new Promise((resolve, reject) => {
+        const request = indexedDB.open(VOICES_DB_NAME, VOICES_DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(CLONED_VOICES_STORE)) {
+            const store = db.createObjectStore(CLONED_VOICES_STORE, { keyPath: 'id' });
+            store.createIndex('userId', 'userId', { unique: false });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      return voicesDBPromise;
+    }
+
+    async function saveVoiceToIndexedDB(voiceData) {
+      try {
+        const db = await initVoicesDB();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(CLONED_VOICES_STORE, 'readwrite');
+          tx.oncomplete = () => resolve(voiceData.id);
+          tx.onerror = () => reject(tx.error);
+          tx.objectStore(CLONED_VOICES_STORE).put(voiceData);
+        });
+      } catch (error) {
+        console.error('❌ No se pudo guardar la voz en IndexedDB', error);
+        return null;
+      }
+    }
+
+    async function getVoiceFromIndexedDB(voiceId) {
+      try {
+        const db = await initVoicesDB();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(CLONED_VOICES_STORE, 'readonly');
+          const req = tx.objectStore(CLONED_VOICES_STORE).get(voiceId);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (error) {
+        console.error('❌ No se pudo leer la voz en IndexedDB', error);
+        return null;
+      }
+    }
+
+    async function deleteVoiceFromIndexedDB(voiceId) {
+      try {
+        const db = await initVoicesDB();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(CLONED_VOICES_STORE, 'readwrite');
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+          tx.objectStore(CLONED_VOICES_STORE).delete(voiceId);
+        });
+      } catch (error) {
+        console.error('❌ No se pudo eliminar la voz en IndexedDB', error);
+        return false;
+      }
+    }
+
+    async function getAllVoicesFromIndexedDB(userId = null) {
+      try {
+        const db = await initVoicesDB();
+        return await new Promise((resolve, reject) => {
+          const tx = db.transaction(CLONED_VOICES_STORE, 'readonly');
+          const store = tx.objectStore(CLONED_VOICES_STORE);
+          const voices = [];
+
+          const cursorRequest = userId ? store.index('userId').openCursor(IDBKeyRange.only(userId)) : store.openCursor();
+
+          cursorRequest.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+              voices.push(cursor.value);
+              cursor.continue();
+            } else {
+              resolve(voices);
+            }
+          };
+
+          cursorRequest.onerror = () => reject(cursorRequest.error);
+        });
+      } catch (error) {
+        console.error('❌ No se pudieron listar las voces en IndexedDB', error);
+        return [];
+      }
+    }
+
+    async function applyClonedVoiceConfig(voiceData) {
+      if (!voiceData) return null;
+
+      const voiceId = voiceData.voiceId || voiceData.id || `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const safeName = voiceData.nombre || 'Mi Voz Clonada';
+      let audioContentType = voiceData.audioContentType || voiceData.mimeType || 'audio/wav';
+      let audioBase64 = voiceData.audioBase64 || voiceData.audioDataUrl || voiceData.audio;
+      const createdAt = voiceData.createdAt || Date.now();
+
+      if (!audioBase64 && voiceId) {
+        try {
+          const storedVoice = await getVoiceFromIndexedDB(voiceId);
+          if (storedVoice?.audioBlob) {
+            audioContentType = storedVoice.audioBlob.type || audioContentType;
+            audioBase64 = await blobToDataUrl(storedVoice.audioBlob);
+          }
+        } catch (error) {
+          console.error('❌ No se pudo recuperar la voz desde IndexedDB', error);
+        }
+      }
+
+      if (audioBase64 && voiceId) {
+        try {
+          const audioBlob = voiceData.audioBlob instanceof Blob
+            ? voiceData.audioBlob
+            : dataUrlToBlob(audioBase64, audioContentType);
+
+          if (audioBlob) {
+            await saveVoiceToIndexedDB({
+              id: voiceId,
+              userId: voiceData.userId || currentUser?.uid || 'guest',
+              audioBlob,
+              nombre: safeName,
+              desc: voiceData.desc || 'Voz personalizada • Tu voz',
+              avatar: voiceData.avatar || 'https://i.pravatar.cc/150?img=68',
+              googleVoice: voiceData.googleVoice || 'es-ES-Neural2-C',
+              languageCode: voiceData.languageCode || 'es-ES',
+              gender: voiceData.gender || 'NEUTRAL',
+              createdAt
+            });
+          }
+        } catch (error) {
+          console.error('❌ No se pudo respaldar la voz clonada en IndexedDB', error);
+        }
+      }
+
       const voice = {
+        id: voiceId,
+        voiceId,
         nombre: safeName,
         desc: voiceData.desc || 'Voz personalizada • Tu voz',
         avatar: voiceData.avatar || 'https://i.pravatar.cc/150?img=68',
@@ -5222,23 +5366,13 @@
         languageCode: voiceData.languageCode || 'es-ES',
         gender: voiceData.gender || 'NEUTRAL',
         isCloned: true,
-        audioBase64: voiceData.audioBase64 || voiceData.audioDataUrl || voiceData.audio,
+        audioBase64,
         audioURL: voiceData.audioURL,
-        audioContentType: voiceData.audioContentType || voiceData.mimeType || 'audio/wav'
+        audioContentType: audioContentType
       };
+
       upsertClonedVoiceConfig(voice);
       persistClonedVoiceLocally(voice);
-
-      if (!voice.audioBase64 && voice.audioURL) {
-        fetchAudioDataUrlFromUrl(voice.audioURL, voice.audioContentType)
-          .then((dataUrl) => {
-            if (!dataUrl) return;
-            voice.audioBase64 = dataUrl;
-            upsertClonedVoiceConfig(voice);
-            persistClonedVoiceLocally(voice);
-          })
-          .catch((error) => console.error('❌ No se pudo recuperar el audio de la voz clonada', error));
-      }
 
       return voice;
     }
@@ -5370,7 +5504,6 @@
     }
 
     async function saveClonedVoiceToFirestore(userId, voiceData) {
-      if (!isFirebaseAvailable()) return null;
       try {
         const audioSource = voiceData?.audioBase64 || voiceData?.audioDataUrl || voiceData?.audio;
         let audioBlob = null;
@@ -5386,43 +5519,42 @@
         }
 
         const compressed = await compressAudioBlob(audioBlob).catch(() => null);
-        const uploadBlob = compressed?.blob || audioBlob;
+        const storedBlob = compressed?.blob || audioBlob;
         const mimeType = compressed?.mimeType || audioBlob.type || 'audio/webm;codecs=opus';
-        const isOpus = mimeType.includes('opus') || mimeType.includes('webm');
-        const extension = isOpus ? 'opus' : (mimeType.includes('mp3') || mimeType.includes('mpeg') ? 'mp3' : 'opus');
+        const voiceId = voiceData.voiceId || `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const createdAt = Date.now();
 
-        const storageRef = firebase.storage().ref();
-        const voiceRef = storageRef.child(`users/${userId}/clonedVoice_${Date.now()}.${extension}`);
-        await voiceRef.put(uploadBlob, {
-          contentType: isOpus ? 'audio/opus' : mimeType,
-          customMetadata: {
-            sampleRate: '16000',
-            channels: '1',
-            bitrate: '24'
-          }
-        });
-        const downloadURL = await voiceRef.getDownloadURL();
-
-        const cleanedVoiceData = {
+        const voiceToStore = {
+          id: voiceId,
+          userId: userId || 'guest',
+          audioBlob: storedBlob,
           nombre: voiceData?.nombre || 'Mi Voz Clonada',
           desc: voiceData?.desc || 'Voz personalizada • Tu voz',
           avatar: voiceData?.avatar || 'https://i.pravatar.cc/150?img=68',
           googleVoice: voiceData?.googleVoice || 'es-ES-Neural2-C',
           languageCode: voiceData?.languageCode || 'es-ES',
           gender: voiceData?.gender || 'NEUTRAL',
-          isCloned: true,
-          audioURL: downloadURL
+          createdAt
         };
 
-        await firebase.firestore().collection('users').doc(userId).set({
-          clonedVoice: {
-            ...cleanedVoiceData,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }
-        }, { merge: true });
+        await saveVoiceToIndexedDB(voiceToStore);
 
-        return downloadURL;
+        if (isFirebaseAvailable() && userId && loadSyncPreference()) {
+          await firebase.firestore().collection('users').doc(userId).set({
+            clonedVoice: {
+              voiceId,
+              nombre: voiceToStore.nombre,
+              desc: voiceToStore.desc,
+              avatar: voiceToStore.avatar,
+              languageCode: voiceToStore.languageCode,
+              gender: voiceToStore.gender,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              storageType: 'local'
+            }
+          }, { merge: true });
+        }
+
+        return { voiceId, mimeType, audioBlob: storedBlob };
       } catch (error) {
         console.error('❌ No se pudo guardar la voz clonada en Firestore', error);
         throw error;
@@ -5438,8 +5570,8 @@
         huggingFaceToken = data.hfToken || data.huggingFaceToken || await getUserHFToken(userId) || getGuestHFToken();
         setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser');
         const prefs = data.preferences || {};
-        if (data.clonedVoice?.audioBase64 || data.clonedVoice?.audioDataUrl || data.clonedVoice?.audio || data.clonedVoice?.audioURL) {
-          applyClonedVoiceConfig(data.clonedVoice);
+        if (data.clonedVoice) {
+          await applyClonedVoiceConfig(data.clonedVoice);
         }
         if (prefs.voice) {
           vozSeleccionada = prefs.voice;
@@ -5961,7 +6093,7 @@
           sourceAudioBlob = compressedRecording?.blob || sourceAudioBlob;
 
           const audioDataUrl = await blobToDataUrl(sourceAudioBlob);
-          const newVoice = applyClonedVoiceConfig({
+          const newVoice = await applyClonedVoiceConfig({
             nombre: 'Mi Voz Clonada',
             desc: 'Voz personalizada • Tu voz',
             avatar: 'https://i.pravatar.cc/150?img=68',
@@ -5977,13 +6109,16 @@
             throw new Error('No se pudo registrar la voz clonada');
           }
 
-          if (currentUser?.uid && isFirebaseAvailable()) {
-            const audioURL = await saveClonedVoiceToFirestore(currentUser.uid, newVoice);
-            if (audioURL) {
-              newVoice.audioURL = audioURL;
-              upsertClonedVoiceConfig(newVoice);
-              persistClonedVoiceLocally(newVoice);
+          const saveResult = await saveClonedVoiceToFirestore(currentUser?.uid || null, newVoice);
+          if (saveResult?.voiceId) {
+            newVoice.voiceId = saveResult.voiceId;
+            newVoice.id = saveResult.voiceId;
+            newVoice.audioContentType = saveResult.mimeType || newVoice.audioContentType;
+            if (!newVoice.audioBase64 && saveResult.audioBlob) {
+              newVoice.audioBase64 = await blobToDataUrl(saveResult.audioBlob);
             }
+            upsertClonedVoiceConfig(newVoice);
+            persistClonedVoiceLocally(newVoice);
           }
 
           vozSeleccionada = newVoice?.nombre || vozSeleccionada;
