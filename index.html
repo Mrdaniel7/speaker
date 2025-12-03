@@ -5285,6 +5285,90 @@
       }
     }
 
+    function getPreferredAudioMimeType() {
+      const preferred = [
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mpeg'
+      ];
+
+      return preferred.find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || 'audio/webm;codecs=opus';
+    }
+
+    async function compressAudioBlob(inputBlob) {
+      try {
+        const targetSampleRate = 16000;
+        const targetChannels = 1;
+        const arrayBuffer = await inputBlob.arrayBuffer();
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+        const offlineContext = new OfflineAudioContext(
+          targetChannels,
+          Math.ceil(decodedBuffer.duration * targetSampleRate),
+          targetSampleRate
+        );
+
+        const source = offlineContext.createBufferSource();
+        source.buffer = decodedBuffer;
+        source.connect(offlineContext.destination);
+        source.start(0);
+
+        const renderedBuffer = await offlineContext.startRendering();
+        await audioContext.close();
+
+        const mimeType = getPreferredAudioMimeType();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: targetSampleRate });
+        const destination = audioCtx.createMediaStreamDestination();
+        const renderedSource = audioCtx.createBufferSource();
+        renderedSource.buffer = renderedBuffer;
+        renderedSource.connect(destination);
+
+        return await new Promise((resolve, reject) => {
+          const chunks = [];
+          let recorder;
+
+          try {
+            recorder = new MediaRecorder(destination.stream, {
+              mimeType,
+              audioBitsPerSecond: 24000
+            });
+          } catch (error) {
+            console.warn('⚠️ No se pudo inicializar MediaRecorder para compresión, usando audio original', error);
+            audioCtx.close();
+            resolve({ blob: inputBlob, mimeType: inputBlob.type || 'audio/wav' });
+            return;
+          }
+
+          recorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) chunks.push(event.data);
+          };
+
+          recorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: mimeType });
+            await audioCtx.close();
+            resolve({ blob, mimeType });
+          };
+
+          recorder.onerror = async (event) => {
+            console.error('❌ Error durante la compresión de audio', event);
+            await audioCtx.close();
+            reject(event.error || event);
+          };
+
+          renderedSource.start();
+          recorder.start();
+          renderedSource.onended = () => {
+            if (recorder.state === 'recording') recorder.stop();
+          };
+        });
+      } catch (error) {
+        console.warn('⚠️ No se pudo comprimir el audio, usando el original', error);
+        return { blob: inputBlob, mimeType: inputBlob.type || 'audio/wav' };
+      }
+    }
+
     async function saveClonedVoiceToFirestore(userId, voiceData) {
       if (!isFirebaseAvailable()) return null;
       try {
@@ -5301,9 +5385,22 @@
           throw new Error('No se encontró audio válido para la voz clonada');
         }
 
+        const compressed = await compressAudioBlob(audioBlob).catch(() => null);
+        const uploadBlob = compressed?.blob || audioBlob;
+        const mimeType = compressed?.mimeType || audioBlob.type || 'audio/webm;codecs=opus';
+        const isOpus = mimeType.includes('opus') || mimeType.includes('webm');
+        const extension = isOpus ? 'opus' : (mimeType.includes('mp3') || mimeType.includes('mpeg') ? 'mp3' : 'opus');
+
         const storageRef = firebase.storage().ref();
-        const voiceRef = storageRef.child(`users/${userId}/clonedVoice_${Date.now()}.wav`);
-        await voiceRef.put(audioBlob);
+        const voiceRef = storageRef.child(`users/${userId}/clonedVoice_${Date.now()}.${extension}`);
+        await voiceRef.put(uploadBlob, {
+          contentType: isOpus ? 'audio/opus' : mimeType,
+          customMetadata: {
+            sampleRate: '16000',
+            channels: '1',
+            bitrate: '24'
+          }
+        });
         const downloadURL = await voiceRef.getDownloadURL();
 
         const cleanedVoiceData = {
@@ -5689,7 +5786,7 @@
                 </div>
               </div>
               <div class="upload-controls" style="margin:12px 0; display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
-                <input type="file" id="cloned-voice-file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" style="display:none;" />
+                <input type="file" id="cloned-voice-file" accept=".mp3,.wav,.ogg,.m4a,.flac,.webm,.opus,audio/*" style="display:none;" />
                 <button id="select-voice-file" class="btn-secondary">📁 Subir archivo de audio</button>
                 <small style="color:#666;">Formatos soportados: MP3, WAV, OGG, M4A, FLAC · mínimo 3 segundos.</small>
               </div>
@@ -5711,6 +5808,7 @@
       document.body.appendChild(modal);
 
       let mediaRecorder;
+      let recordingMimeType = getPreferredAudioMimeType();
       let audioChunks = [];
       let recordingStartTime;
       let timerInterval;
@@ -5730,7 +5828,7 @@
       const fileInput = modal.querySelector('#cloned-voice-file');
       const selectFileBtn = modal.querySelector('#select-voice-file');
 
-      const acceptedMimeTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/flac'];
+      const acceptedMimeTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a', 'audio/flac', 'audio/webm', 'audio/webm;codecs=opus', 'audio/opus'];
 
       const cleanupSourceUrl = () => {
         if (sourceAudioUrl) {
@@ -5771,7 +5869,12 @@
       startBtn.addEventListener('click', async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
+          const mimeType = getPreferredAudioMimeType();
+          recordingMimeType = mimeType;
+          mediaRecorder = new MediaRecorder(stream, {
+            mimeType,
+            audioBitsPerSecond: 24000
+          });
           audioChunks = [];
 
           mediaRecorder.ondataavailable = (event) => {
@@ -5779,7 +5882,7 @@
           };
 
           mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const audioBlob = new Blob(audioChunks, { type: recordingMimeType || 'audio/webm;codecs=opus' });
             try {
               await preparePreviewFromBlob(audioBlob);
             } catch (error) {
@@ -5854,6 +5957,9 @@
         }, 200);
 
         try {
+          const compressedRecording = await compressAudioBlob(sourceAudioBlob);
+          sourceAudioBlob = compressedRecording?.blob || sourceAudioBlob;
+
           const audioDataUrl = await blobToDataUrl(sourceAudioBlob);
           const newVoice = applyClonedVoiceConfig({
             nombre: 'Mi Voz Clonada',
@@ -5864,7 +5970,7 @@
             gender: 'NEUTRAL',
             isCloned: true,
             audioBase64: audioDataUrl,
-            audioContentType: sourceAudioBlob.type || 'audio/wav'
+            audioContentType: compressedRecording?.mimeType || sourceAudioBlob.type || 'audio/webm;codecs=opus'
           });
 
           if (!newVoice) {
