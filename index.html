@@ -18,6 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <style>
     :root {
       --amarillo-principal: #FFB800;
@@ -3548,6 +3549,7 @@
     }
 
     async function deleteDocumento(id) {
+      const existingDoc = id ? await getDocumento(id) : null;
       const db = await openDB();
       const tx = db.transaction('documentos', 'readwrite');
       const delReq = tx.objectStore('documentos').delete(id);
@@ -3557,6 +3559,14 @@
         delReq.onsuccess = () => tx.oncomplete = async () => {
           if (shouldSync) {
             try {
+              if (existingDoc?.audioUrl && isFirebaseAvailable() && firebase.storage) {
+                try {
+                  const storageRef = firebase.storage().refFromURL(existingDoc.audioUrl);
+                  await storageRef.delete();
+                } catch (error) {
+                  console.warn('⚠️ No se pudo eliminar el audio asociado en Storage', error);
+                }
+              }
               await deleteFirestoreDocument(currentUser?.uid, id);
             } catch (error) {
               console.error('No se pudo eliminar en Firestore', error);
@@ -4957,16 +4967,28 @@
       window.dispatchEvent(new Event('hfTokenUpdated'));
     };
 
+    let intentosModal = 0;
+    const MAX_INTENTOS_MODAL = 3;
+
     async function verificarYMostrarPopupAPIKey() {
       console.log('1️⃣ Iniciando verificación de API key');
+
+      if (intentosModal >= MAX_INTENTOS_MODAL) {
+        console.log('Usuario ha rechazado configurar API Keys múltiples veces');
+        return;
+      }
 
       if (apiKeySetupModal) {
         apiKeySetupModal.style.display = 'none';
       }
 
+      const hasConfig = getStoredApiKey() || getStoredHFToken() || hasAPIKeySkipPreference();
+      if (hasConfig) return;
+
       const user = firebase?.auth?.()?.currentUser;
       if (!user) {
         console.log('👤 Sin usuario autenticado, mostrar popup');
+        intentosModal++;
         mostrarPopupAPIKey();
         return;
       }
@@ -5001,9 +5023,11 @@
 
         console.log('❌ No se encontró API key, MOSTRAR popup');
         actualizarEstadoAPIKeyUI(false);
+        intentosModal++;
         mostrarPopupAPIKey();
       } catch (error) {
         console.error('Error verificando API key:', error);
+        intentosModal++;
         mostrarPopupAPIKey();
       }
     }
@@ -5112,7 +5136,8 @@
     function cerrarApiKeySetupModal(force = false) {
       const modal = document.getElementById('api-key-setup-modal');
       if (!modal) return;
-      if (!force && !getStoredApiKey() && !getStoredHFToken() && !hasAPIKeySkipPreference()) {
+      const hasAnyConfig = getStoredApiKey() || getStoredHFToken();
+      if (!force && !hasAnyConfig && !hasAPIKeySkipPreference()) {
         mostrarPopupError('⚠️ Configura una API Key o selecciona "Omitir" para usar voces sintéticas');
         toggleOverlay(true);
         modal.style.display = 'flex';
@@ -5129,7 +5154,7 @@
       setVoiceSystem('browser');
       actualizarEstadoAPIKeyUI(false);
       cerrarApiKeySetupModal(true);
-      mostrarPopupError('Usarás voces del sistema hasta que configures tu API Key de Google Cloud TTS.');
+      mostrarMensaje('ADVERTENCIA: Sin claves API configuradas, solo funcionarán las voces clonadas previamente guardadas. No podrás usar Google TTS ni clonar nuevas voces desde Hugging Face.', 'warning');
     }
 
     function updateFirebaseStatusLabel(value) {
@@ -5160,7 +5185,7 @@
       const hfToken = hfInput?.value.trim();
 
       if (!apiKey && !hfToken) {
-        mostrarPopupError('Ingresa una API key de Google o un token de Hugging Face.');
+        mostrarMensaje('Por favor, ingresa al menos una clave API', 'error');
         return;
       }
 
@@ -5168,14 +5193,12 @@
       let validationResult = { valid: true, message: '' };
 
       try {
-        if (apiKey) {
-          validationResult = await validarAPIKey(apiKey);
-        }
+        validationResult = await validarAPIKey(apiKey, hfToken);
       } finally {
         toggleApiKeyValidationLoading(false);
       }
 
-      if (apiKey && !validationResult.valid) {
+      if (!validationResult.valid) {
         mostrarPopupError(validationResult.message || 'API Key inválida o sin permisos.');
         return;
       }
@@ -5317,12 +5340,14 @@
       const safeName = voiceData.nombre || 'Mi Voz Clonada';
       let audioContentType = voiceData.audioContentType || voiceData.mimeType || 'audio/wav';
       let audioBase64 = voiceData.audioBase64 || voiceData.audioDataUrl || voiceData.audio;
-      const createdAt = voiceData.createdAt || Date.now();
+      const createdAt = voiceData.createdAt?.toDate?.()?.getTime?.() || voiceData.createdAt?.toMillis?.() || voiceData.createdAt || Date.now();
+      let audioBlob = voiceData.audioBlob instanceof Blob ? voiceData.audioBlob : null;
 
-      if (!audioBase64 && voiceId) {
+      if (!audioBase64 && !audioBlob && voiceId) {
         try {
           const storedVoice = await getVoiceFromIndexedDB(voiceId);
           if (storedVoice?.audioBlob) {
+            audioBlob = storedVoice.audioBlob;
             audioContentType = storedVoice.audioBlob.type || audioContentType;
             audioBase64 = await blobToDataUrl(storedVoice.audioBlob);
           }
@@ -5331,24 +5356,56 @@
         }
       }
 
+      if (!audioBase64 && !audioBlob && voiceData.storageURL && isFirebaseAvailable() && loadSyncPreference() && !isGuestMode) {
+        try {
+          const response = await fetch(voiceData.storageURL);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const remoteBlob = await response.blob();
+          audioBlob = remoteBlob;
+          audioContentType = remoteBlob.type || audioContentType;
+          audioBase64 = await blobToDataUrl(remoteBlob);
+
+          await saveVoiceToIndexedDB({
+            id: voiceId,
+            userId: voiceData.userId || currentUser?.uid || 'guest',
+            audioBlob: remoteBlob,
+            nombre: safeName,
+            desc: voiceData.desc || 'Voz personalizada • Tu voz',
+            avatar: voiceData.avatar || 'https://i.pravatar.cc/150?img=68',
+            googleVoice: voiceData.googleVoice || 'es-ES-Neural2-C',
+            languageCode: voiceData.languageCode || 'es-ES',
+            gender: voiceData.gender || 'NEUTRAL',
+            createdAt,
+            storageURL: voiceData.storageURL,
+            audioContentType: audioContentType
+          });
+        } catch (error) {
+          console.error('❌ No se pudo descargar la voz clonada desde Storage', error);
+        }
+      }
+
+      if (!audioBase64 && voiceData.audioURL) {
+        audioBase64 = await fetchAudioDataUrlFromUrl(voiceData.audioURL, audioContentType);
+      }
+
       if (audioBase64 && voiceId) {
         try {
-          const audioBlob = voiceData.audioBlob instanceof Blob
-            ? voiceData.audioBlob
-            : dataUrlToBlob(audioBase64, audioContentType);
+          const audioBlobToStore = audioBlob || dataUrlToBlob(audioBase64, audioContentType);
 
-          if (audioBlob) {
+          if (audioBlobToStore) {
             await saveVoiceToIndexedDB({
               id: voiceId,
               userId: voiceData.userId || currentUser?.uid || 'guest',
-              audioBlob,
+              audioBlob: audioBlobToStore,
               nombre: safeName,
               desc: voiceData.desc || 'Voz personalizada • Tu voz',
               avatar: voiceData.avatar || 'https://i.pravatar.cc/150?img=68',
               googleVoice: voiceData.googleVoice || 'es-ES-Neural2-C',
               languageCode: voiceData.languageCode || 'es-ES',
               gender: voiceData.gender || 'NEUTRAL',
-              createdAt
+              createdAt,
+              storageURL: voiceData.storageURL,
+              audioContentType: audioContentType
             });
           }
         } catch (error) {
@@ -5368,7 +5425,8 @@
         isCloned: true,
         audioBase64,
         audioURL: voiceData.audioURL,
-        audioContentType: audioContentType
+        audioContentType: audioContentType,
+        storageURL: voiceData.storageURL
       };
 
       upsertClonedVoiceConfig(voice);
@@ -5534,30 +5592,160 @@
           googleVoice: voiceData?.googleVoice || 'es-ES-Neural2-C',
           languageCode: voiceData?.languageCode || 'es-ES',
           gender: voiceData?.gender || 'NEUTRAL',
-          createdAt
+          createdAt,
+          audioContentType: mimeType
         };
 
         await saveVoiceToIndexedDB(voiceToStore);
 
-        if (isFirebaseAvailable() && userId && loadSyncPreference()) {
-          await firebase.firestore().collection('users').doc(userId).set({
-            clonedVoice: {
-              voiceId,
-              nombre: voiceToStore.nombre,
-              desc: voiceToStore.desc,
-              avatar: voiceToStore.avatar,
-              languageCode: voiceToStore.languageCode,
-              gender: voiceToStore.gender,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              storageType: 'local'
-            }
-          }, { merge: true });
+        if (!isFirebaseAvailable() || !userId || !loadSyncPreference() || isGuestMode) {
+          return { voiceId, mimeType, audioBlob: storedBlob };
         }
 
-        return { voiceId, mimeType, audioBlob: storedBlob };
+        const storage = firebase.storage?.();
+        if (!storage) {
+          throw new Error('Firebase Storage no está disponible');
+        }
+
+        const storagePath = `users/${userId}/clonedVoices/${voiceId}.webm`;
+        const storageRef = storage.ref(storagePath);
+        const uploadTask = storageRef.put(storedBlob, { contentType: mimeType });
+        const progressCallback = typeof voiceData.onUploadProgress === 'function' ? voiceData.onUploadProgress : null;
+
+        return await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed', (snapshot) => {
+            if (progressCallback && snapshot?.totalBytes) {
+              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              progressCallback(progress);
+            }
+          }, (error) => {
+            console.error('❌ Error subiendo la voz a Storage', error);
+            reject(error);
+          }, async () => {
+            try {
+              const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+              const metadata = {
+                voiceId,
+                nombre: voiceToStore.nombre,
+                desc: voiceToStore.desc,
+                avatar: voiceToStore.avatar,
+                languageCode: voiceToStore.languageCode,
+                gender: voiceToStore.gender,
+                storageURL: downloadURL,
+                audioContentType: mimeType,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+              };
+
+              await firebase.firestore()
+                .collection('users')
+                .doc(userId)
+                .collection('clonedVoices')
+                .doc(voiceId)
+                .set(metadata);
+
+              await saveVoiceToIndexedDB({ ...voiceToStore, storageURL: downloadURL });
+
+              resolve({ voiceId, mimeType, audioBlob: storedBlob, downloadURL });
+            } catch (error) {
+              console.error('❌ No se pudo guardar metadata de la voz clonada', error);
+              reject(error);
+            }
+          });
+        });
       } catch (error) {
         console.error('❌ No se pudo guardar la voz clonada en Firestore', error);
         throw error;
+      }
+    }
+
+    async function loadUserClonedVoices(userId) {
+      if (!userId || !isFirebaseAvailable() || !loadSyncPreference()) return [];
+      try {
+        const snapshot = await firebase.firestore()
+          .collection('users')
+          .doc(userId)
+          .collection('clonedVoices')
+          .orderBy('createdAt', 'desc')
+          .get();
+
+        const voices = [];
+
+        for (const doc of snapshot.docs) {
+          const data = doc.data() || {};
+          const createdAt = data.createdAt?.toDate?.()?.getTime?.() || data.createdAt?.toMillis?.() || Date.now();
+          const appliedVoice = await applyClonedVoiceConfig({
+            ...data,
+            voiceId: data.voiceId || doc.id,
+            id: data.voiceId || doc.id,
+            userId,
+            createdAt
+          });
+          if (appliedVoice) voices.push(appliedVoice);
+        }
+
+        renderVoices();
+        return voices;
+      } catch (error) {
+        console.error('❌ No se pudieron cargar las voces clonadas del usuario', error);
+        return [];
+      }
+    }
+
+    async function deleteClonedVoice(userId, voiceId) {
+      if (!voiceId) return false;
+      let voiceName = null;
+      try {
+        const storedVoice = await getVoiceFromIndexedDB(voiceId);
+        voiceName = storedVoice?.nombre || voiceName;
+        const storedURL = storedVoice?.storageURL;
+        await deleteVoiceFromIndexedDB(voiceId);
+
+        if (isFirebaseAvailable() && userId && loadSyncPreference()) {
+          try {
+            const docRef = firebase.firestore()
+              .collection('users')
+              .doc(userId)
+              .collection('clonedVoices')
+              .doc(voiceId);
+            const docSnap = await docRef.get();
+            const docData = docSnap.data();
+            const storageURL = docData?.storageURL || storedURL;
+
+            if (storageURL && firebase.storage) {
+              try {
+                const storageRef = firebase.storage().refFromURL(storageURL);
+                await storageRef.delete();
+              } catch (error) {
+                console.warn('⚠️ No se pudo eliminar el archivo de Storage', error);
+              }
+            } else if (firebase.storage) {
+              try {
+                await firebase.storage().ref(`users/${userId}/clonedVoices/${voiceId}.webm`).delete();
+              } catch (error) {
+                console.warn('⚠️ No se pudo eliminar el archivo de Storage (fallback)', error);
+              }
+            }
+
+            await docRef.delete();
+          } catch (error) {
+            console.error('❌ Error eliminando voz clonada en Firebase', error);
+          }
+        }
+
+        const voiceIndex = VOICES_DATA.findIndex((v) => v.voiceId === voiceId || v.id === voiceId || (voiceName && v.nombre === voiceName));
+        if (voiceIndex >= 0) VOICES_DATA.splice(voiceIndex, 1);
+        if (voiceName && VOICE_CONFIG[voiceName]) delete VOICE_CONFIG[voiceName];
+
+        const storedLocalVoice = getLocalClonedVoice();
+        if (storedLocalVoice?.voiceId === voiceId || storedLocalVoice?.id === voiceId) {
+          localStorage.removeItem(CLONED_VOICE_STORAGE_KEY);
+        }
+
+        renderVoices();
+        return true;
+      } catch (error) {
+        console.error('❌ No se pudo eliminar la voz clonada', error);
+        return false;
       }
     }
 
@@ -5570,7 +5758,9 @@
         huggingFaceToken = data.hfToken || data.huggingFaceToken || await getUserHFToken(userId) || getGuestHFToken();
         setVoiceSystem(userGoogleTTSKey ? 'google' : 'browser');
         const prefs = data.preferences || {};
-        if (data.clonedVoice) {
+        if (loadSyncPreference()) {
+          await loadUserClonedVoices(userId);
+        } else if (data.clonedVoice) {
           await applyClonedVoiceConfig(data.clonedVoice);
         }
         if (prefs.voice) {
@@ -5629,29 +5819,43 @@
       }
     }
 
-    async function validarAPIKey(apiKey) {
+    async function validarAPIKey(apiKey, hfToken) {
       try {
-        const controller = new AbortController();
-        const response = await fetchWithTimeout(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        }, 10000, controller);
+        if (apiKey) {
+          const controller = new AbortController();
+          const response = await fetchWithTimeout(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          }, 10000, controller);
 
-        const data = await response.json();
+          const data = await response.json();
 
-        if (!response.ok) {
-          const message = data?.error?.message || 'API Key inválida o sin permisos';
-          return { valid: false, message };
+          if (!response.ok) {
+            const message = data?.error?.message || 'API Key inválida o sin permisos';
+            return { valid: false, message };
+          }
+
+          const hasVoices = Array.isArray(data.voices) && data.voices.length > 0;
+          if (!hasVoices) return { valid: false, message: 'La API Key no devolvió voces disponibles' };
         }
 
-        const hasVoices = Array.isArray(data.voices) && data.voices.length > 0;
-        return { valid: hasVoices, message: hasVoices ? '' : 'La API Key no devolvió voces disponibles' };
+        if (hfToken) {
+          const hfResponse = await fetch('https://huggingface.co/api/whoami', {
+            headers: { Authorization: `Bearer ${hfToken}` }
+          });
+
+          if (!hfResponse.ok) {
+            return { valid: false, message: 'Token de Hugging Face inválido' };
+          }
+        }
+
+        return { valid: true, message: 'Claves validadas correctamente' };
       } catch (error) {
         console.error('Error validando API Key:', error);
         if (error.name === 'TimeoutError') {
           return { valid: false, message: 'Tiempo de espera agotado al validar la API Key.' };
         }
-        return { valid: false, message: 'No se pudo validar la API Key. Revisa tu conexión.' };
+        return { valid: false, message: apiKey && !hfToken ? 'No se pudo validar la API Key. Revisa tu conexión.' : 'Error al validar HF Token' };
       }
     }
 
@@ -5679,8 +5883,8 @@
         return true;
       }
 
-      if (candidateKey) {
-        const { valid, message } = await validarAPIKey(candidateKey);
+      if (candidateKey || huggingFaceToken) {
+        const { valid, message } = await validarAPIKey(candidateKey, huggingFaceToken);
         if (valid) {
           await setStoredApiKey(candidateKey);
           actualizarEstadoAPIKeyUI(true);
