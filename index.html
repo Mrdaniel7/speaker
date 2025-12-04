@@ -4967,16 +4967,28 @@
       window.dispatchEvent(new Event('hfTokenUpdated'));
     };
 
+    let intentosModal = 0;
+    const MAX_INTENTOS_MODAL = 3;
+
     async function verificarYMostrarPopupAPIKey() {
       console.log('1️⃣ Iniciando verificación de API key');
+
+      if (intentosModal >= MAX_INTENTOS_MODAL) {
+        console.log('Usuario ha rechazado configurar API Keys múltiples veces');
+        return;
+      }
 
       if (apiKeySetupModal) {
         apiKeySetupModal.style.display = 'none';
       }
 
+      const hasConfig = getStoredApiKey() || getStoredHFToken() || hasAPIKeySkipPreference();
+      if (hasConfig) return;
+
       const user = firebase?.auth?.()?.currentUser;
       if (!user) {
         console.log('👤 Sin usuario autenticado, mostrar popup');
+        intentosModal++;
         mostrarPopupAPIKey();
         return;
       }
@@ -5011,9 +5023,11 @@
 
         console.log('❌ No se encontró API key, MOSTRAR popup');
         actualizarEstadoAPIKeyUI(false);
+        intentosModal++;
         mostrarPopupAPIKey();
       } catch (error) {
         console.error('Error verificando API key:', error);
+        intentosModal++;
         mostrarPopupAPIKey();
       }
     }
@@ -5122,7 +5136,8 @@
     function cerrarApiKeySetupModal(force = false) {
       const modal = document.getElementById('api-key-setup-modal');
       if (!modal) return;
-      if (!force && !getStoredApiKey() && !getStoredHFToken() && !hasAPIKeySkipPreference()) {
+      const hasAnyConfig = getStoredApiKey() || getStoredHFToken();
+      if (!force && !hasAnyConfig && !hasAPIKeySkipPreference()) {
         mostrarPopupError('⚠️ Configura una API Key o selecciona "Omitir" para usar voces sintéticas');
         toggleOverlay(true);
         modal.style.display = 'flex';
@@ -5139,7 +5154,7 @@
       setVoiceSystem('browser');
       actualizarEstadoAPIKeyUI(false);
       cerrarApiKeySetupModal(true);
-      mostrarPopupError('Usarás voces del sistema hasta que configures tu API Key de Google Cloud TTS.');
+      mostrarMensaje('ADVERTENCIA: Sin claves API configuradas, solo funcionarán las voces clonadas previamente guardadas. No podrás usar Google TTS ni clonar nuevas voces desde Hugging Face.', 'warning');
     }
 
     function updateFirebaseStatusLabel(value) {
@@ -5170,7 +5185,7 @@
       const hfToken = hfInput?.value.trim();
 
       if (!apiKey && !hfToken) {
-        mostrarPopupError('Ingresa una API key de Google o un token de Hugging Face.');
+        mostrarMensaje('Por favor, ingresa al menos una clave API', 'error');
         return;
       }
 
@@ -5178,14 +5193,12 @@
       let validationResult = { valid: true, message: '' };
 
       try {
-        if (apiKey) {
-          validationResult = await validarAPIKey(apiKey);
-        }
+        validationResult = await validarAPIKey(apiKey, hfToken);
       } finally {
         toggleApiKeyValidationLoading(false);
       }
 
-      if (apiKey && !validationResult.valid) {
+      if (!validationResult.valid) {
         mostrarPopupError(validationResult.message || 'API Key inválida o sin permisos.');
         return;
       }
@@ -5806,29 +5819,43 @@
       }
     }
 
-    async function validarAPIKey(apiKey) {
+    async function validarAPIKey(apiKey, hfToken) {
       try {
-        const controller = new AbortController();
-        const response = await fetchWithTimeout(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        }, 10000, controller);
+        if (apiKey) {
+          const controller = new AbortController();
+          const response = await fetchWithTimeout(`https://texttospeech.googleapis.com/v1/voices?key=${apiKey}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          }, 10000, controller);
 
-        const data = await response.json();
+          const data = await response.json();
 
-        if (!response.ok) {
-          const message = data?.error?.message || 'API Key inválida o sin permisos';
-          return { valid: false, message };
+          if (!response.ok) {
+            const message = data?.error?.message || 'API Key inválida o sin permisos';
+            return { valid: false, message };
+          }
+
+          const hasVoices = Array.isArray(data.voices) && data.voices.length > 0;
+          if (!hasVoices) return { valid: false, message: 'La API Key no devolvió voces disponibles' };
         }
 
-        const hasVoices = Array.isArray(data.voices) && data.voices.length > 0;
-        return { valid: hasVoices, message: hasVoices ? '' : 'La API Key no devolvió voces disponibles' };
+        if (hfToken) {
+          const hfResponse = await fetch('https://huggingface.co/api/whoami', {
+            headers: { Authorization: `Bearer ${hfToken}` }
+          });
+
+          if (!hfResponse.ok) {
+            return { valid: false, message: 'Token de Hugging Face inválido' };
+          }
+        }
+
+        return { valid: true, message: 'Claves validadas correctamente' };
       } catch (error) {
         console.error('Error validando API Key:', error);
         if (error.name === 'TimeoutError') {
           return { valid: false, message: 'Tiempo de espera agotado al validar la API Key.' };
         }
-        return { valid: false, message: 'No se pudo validar la API Key. Revisa tu conexión.' };
+        return { valid: false, message: apiKey && !hfToken ? 'No se pudo validar la API Key. Revisa tu conexión.' : 'Error al validar HF Token' };
       }
     }
 
@@ -5856,8 +5883,8 @@
         return true;
       }
 
-      if (candidateKey) {
-        const { valid, message } = await validarAPIKey(candidateKey);
+      if (candidateKey || huggingFaceToken) {
+        const { valid, message } = await validarAPIKey(candidateKey, huggingFaceToken);
         if (valid) {
           await setStoredApiKey(candidateKey);
           actualizarEstadoAPIKeyUI(true);
