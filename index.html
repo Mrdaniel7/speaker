@@ -65,6 +65,8 @@
       outline-offset: 2px;
     }
 
+    button, .tarjeta-acceso, .mobile-cta { touch-action: manipulation; }
+
     .page { display: none; padding: 16px; }
     .page.active { display: block; }
 
@@ -402,6 +404,14 @@
     .mobile-hero,
     .mobile-action-grid,
     .mobile-player-header { display: none; }
+
+    .mobile-tip {
+      display: none;
+      margin: 10px 0 4px;
+      color: var(--texto-gris);
+      font-weight: 700;
+      line-height: 1.4;
+    }
 
     .mobile-hero {
       background: linear-gradient(160deg, #fff7ea, #ffe6c7);
@@ -1189,16 +1199,24 @@
       .promo-banner {
         display: none;
       }
+      .mobile-tip { display: block; }
       .promo-text { position: relative !important; inset: auto !important; margin-top: 12px; }
       .carousel-dots { position: relative; bottom: auto; left: auto; margin-top: 10px; }
       .section-header h2 { margin: 10px 0 12px; font-size: 20px; }
-      .access-cards { gap: 10px; }
+      .mobile-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mobile-cta { min-height: 72px; padding: 14px; font-size: 15px; border-radius: 16px; border-width: 2px; }
+      .mobile-cta .icon { width: 44px; height: 44px; font-size: 20px; }
+      .access-cards { gap: 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .tarjeta-acceso {
         background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(255, 243, 224, 0.9));
         border: 1px solid #FFE0B2;
         box-shadow: 0 12px 26px rgba(255, 149, 0, 0.14);
         padding: 16px;
+        min-height: 82px;
+        gap: 14px;
       }
+      .tarjeta-acceso h3 { font-size: 16px; }
+      .tarjeta-acceso p { font-size: 13px; }
       .icon-card { background: rgba(255, 255, 255, 0.7); border: 1px solid #FFE0B2; }
       .library-header {
         flex-direction: column;
@@ -1218,24 +1236,28 @@
       .mobile-action-grid,
       .mobile-player-header { display: block; }
       .player-body { gap: 14px; }
-      .controles { gap: 18px; }
-      .ctrl-btn { width: 44px; height: 44px; }
-      .play-btn { width: 86px; height: 86px; font-size: 30px; }
+      .controles { gap: 12px; flex-wrap: wrap; }
+      .ctrl-btn { width: 52px; height: 52px; }
+      .play-btn { width: 92px; height: 92px; font-size: 32px; }
       .footer-player { gap: 16px; justify-content: space-between; }
       .text-container { max-height: 320px; font-size: 16px; }
       .text-config-panel { left: 10px; right: 10px; width: auto; }
       .settings-page { gap: 12px; }
       .config-seccion { border-radius: 18px; }
       .bottom-nav {
-        height: 72px;
+        height: 84px;
         border: 1px solid #FFE0B2;
         background: rgba(255, 255, 255, 0.92);
         backdrop-filter: blur(18px);
         border-top-left-radius: 20px;
         border-top-right-radius: 20px;
+        padding: 8px 10px;
+        gap: 6px;
       }
-      .nav-item { font-size: 13px; color: #6b6b6b; }
+      .nav-item { font-size: 14px; color: #6b6b6b; gap: 6px; }
+      .nav-item .icon { width: 44px; height: 44px; border-radius: 12px; background: #FFF6EC; display: grid; place-items: center; }
       .nav-item.active { color: var(--naranja-botones); }
+      .nav-item.active .icon { background: linear-gradient(135deg, #FFB800, #FF9500); color: #fff; box-shadow: 0 6px 16px rgba(255,149,0,0.18); }
       .fab {
         right: 16px;
         bottom: 98px;
@@ -1548,6 +1570,7 @@
               <span>Escanear</span>
             </button>
           </div>
+          <p class="mobile-tip">Todo está al alcance del pulgar: usa estos accesos o la barra inferior para moverte sin esfuerzo.</p>
         </div>
         <div class="promo-banner">
           <svg class="promo-illustration" viewBox="0 0 320 180">
