@@ -248,6 +248,7 @@
 
     .player-toolbar { height: 56px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; position: sticky; top: 0; }
     .icon-btn { width: 40px; height: 40px; border: none; background: transparent; font-size: 20px; cursor: pointer; }
+    .icon-btn.active { background: #FFF3E0; color: #FF9500; border-radius: 10px; box-shadow: 0 6px 16px rgba(255,149,0,0.25); }
     .player-body { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
     #player-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 12px; }
     .text-reader-wrapper { position: relative; }
@@ -638,6 +639,50 @@
 
     .btn-cancel { background: #F5F5F5; color: #666; }
     .btn-confirm, .btn-submit { background: linear-gradient(135deg, #FFB800, #FF9500); color: #FFF; }
+
+    .quick-actions-overlay, .player-options-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.25);
+      z-index: 120;
+      display: grid;
+      place-items: flex-end center;
+      padding: 16px;
+    }
+
+    .quick-actions-menu, .player-options-menu {
+      width: min(420px, 96%);
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.16);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .quick-actions-menu h4, .player-options-menu h4 { margin: 4px 0 6px; font-size: 16px; font-weight: 800; }
+
+    .quick-actions-grid, .player-options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+
+    .quick-action-btn, .player-option-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--borde-gris);
+      background: #FFFDF7;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+
+    .player-option-btn { background: #F8FBFF; }
+
+    .quick-action-btn:hover, .player-option-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
+
+    .quick-action-btn span, .player-option-btn span { font-size: 22px; }
 
     /* --- Popup API Key --- */
     .modal-api-key {
@@ -1189,7 +1234,7 @@
         <header class="player-toolbar">
           <button class="icon-btn" data-action="back">←</button>
           <button class="icon-btn" id="open-text-config" title="Configuración de lectura" aria-label="Abrir configuración de lectura">⚙️</button>
-          <button class="icon-btn" title="Resaltar">≡</button>
+          <button class="icon-btn" title="Menú del documento" aria-label="Abrir menú del documento">≡</button>
           <button class="icon-btn" title="Tamaño">Aa</button>
           <button class="icon-btn" title="IA">🔁</button>
           <button class="icon-btn" title="Compartir">↑</button>
@@ -3728,6 +3773,9 @@
     let pendingVoiceAudio = null;
     let audioPreview = null;
     let repeatPlayback = false;
+    let apiKeySkipSelected = false;
+    let quickActionsOverlay = null;
+    let playerOptionsOverlay = null;
     const xttsAudioCache = new Map();
 
     const getTextConfigKey = () => `textConfig_${currentUser?.uid || 'guest'}`;
@@ -4937,7 +4985,9 @@
     const getStoredHFToken = () => huggingFaceToken;
     const hasAPIKeySkipPreference = () => {
       const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser?.uid}` : GUEST_SKIP_API_KEY_KEY;
-      return localStorage.getItem(skipKey) === 'true';
+      const storedSkip = localStorage.getItem(skipKey) === 'true';
+      if (storedSkip) apiKeySkipSelected = true;
+      return apiKeySkipSelected || storedSkip;
     };
     const setStoredApiKey = async (key) => {
       if (!isGuestMode && currentUser?.uid && isFirebaseAvailable()) {
@@ -4951,6 +5001,7 @@
           setGuestAPIKey(null);
         }
       }
+      apiKeySkipSelected = false;
       userGoogleTTSKey = key;
       setVoiceSystem(key ? 'google' : 'browser');
       window.dispatchEvent(new Event('apiKeyUpdated'));
@@ -5151,6 +5202,7 @@
       const skipKey = currentUser?.uid ? `skipAPIKey_${currentUser?.uid}` : GUEST_SKIP_API_KEY_KEY;
       localStorage.setItem(skipKey, 'true');
       userGoogleTTSKey = null;
+      apiKeySkipSelected = true;
       setVoiceSystem('browser');
       actualizarEstadoAPIKeyUI(false);
       cerrarApiKeySetupModal(true);
@@ -5868,6 +5920,7 @@
       const skipAPIKey = isGuestMode
         ? localStorage.getItem(GUEST_SKIP_API_KEY_KEY) === 'true'
         : localStorage.getItem(`skipAPIKey_${currentUser?.uid}`) === 'true';
+      apiKeySkipSelected = skipAPIKey;
       let candidateKey = isGuestMode ? getGuestAPIKey() : getStoredApiKey();
 
       if (!candidateKey && currentUser?.uid && isFirebaseAvailable()) {
@@ -6568,6 +6621,7 @@
 
       const vozConfig = VOICE_CONFIG[vozSeleccionada] || getAvailableVoices().find((v) => v.nombre === vozSeleccionada);
       const isClonedVoice = vozConfig?.isCloned && (vozConfig?.audioBase64 || vozConfig?.audioURL);
+      const skipPreference = hasAPIKeySkipPreference();
 
       if (!vozConfig) {
         mostrarPopupError('La voz seleccionada no está disponible.');
@@ -6575,7 +6629,7 @@
         return;
       }
 
-      if (!userGoogleTTSKey && !hasAPIKeySkipPreference() && !isClonedVoice) {
+      if (!userGoogleTTSKey && !skipPreference && !isClonedVoice) {
         mostrarPopupError('🔑 Configura tu API Key de Google Cloud TTS para usar voces naturales');
         mostrarApiKeySetupModal();
         togglePlayButtonLoading(false);
@@ -6592,7 +6646,7 @@
       console.log(`📝 ${palabrasTotales} palabras preparadas`);
 
       try {
-        if (!userGoogleTTSKey && hasAPIKeySkipPreference()) {
+        if (!userGoogleTTSKey && skipPreference) {
           audioElement = await usarVozNavegador(documentoActivo.texto, vozConfig, velocidadActual);
         } else if (pendingVoiceAudio) {
           audioElement = pendingVoiceAudio;
@@ -6648,7 +6702,7 @@
         }
       };
 
-      if ((!userGoogleTTSKey && hasAPIKeySkipPreference()) || vozConfig?.isCloned) {
+      if ((!userGoogleTTSKey && skipPreference) || vozConfig?.isCloned) {
         audioElement.addEventListener('timeupdate', actualizarProgresoBasico);
       }
 
@@ -6795,16 +6849,26 @@
     dockTextConfigBtn?.addEventListener('click', toggleDockConfigPanel);
 
     highlightBtn?.addEventListener('click', () => {
-      textConfig.highlightWord = !textConfig.highlightWord;
-      textConfig.highlightSentence = textConfig.highlightWord;
-      highlightBtn.classList.toggle('active', textConfig.highlightWord);
-      applyTextConfig(true);
+      if (!documentoActivo) {
+        mostrarPopupError('Selecciona un documento para ver las opciones.');
+        return;
+      }
+      highlightBtn.classList.add('active');
+      abrirMenuDocumento(documentoActivo);
+      setTimeout(() => highlightBtn.classList.remove('active'), 250);
     });
 
     sizeBtn?.addEventListener('click', () => {
       const nextSize = textConfig.fontSize >= 32 ? TEXT_CONFIG_DEFAULTS.fontSize : textConfig.fontSize + 2;
       textConfig.fontSize = nextSize;
+      sizeBtn.classList.add('active');
+      sizeBtn.setAttribute('aria-pressed', 'true');
+      sizeBtn.title = `Tamaño de texto: ${Math.round(nextSize)}px`;
       applyTextConfig(true);
+      setTimeout(() => {
+        sizeBtn.classList.remove('active');
+        sizeBtn.setAttribute('aria-pressed', 'false');
+      }, 300);
     });
 
     aiBtn?.addEventListener('click', () => {
@@ -6827,10 +6891,82 @@
       }
     });
 
-    optionsBtn?.addEventListener('click', () => {
-      detenerLectura();
-      savedPlaybackPosition = 0;
-    });
+    function cerrarMenuOpcionesReproductor() {
+      if (playerOptionsOverlay) {
+        playerOptionsOverlay.remove();
+        playerOptionsOverlay = null;
+      }
+    }
+
+    function actualizarEstadoRepeatBtn(btn) {
+      if (!btn) return;
+      btn.classList.toggle('active', repeatPlayback);
+      const label = repeatPlayback ? 'Repetición activada' : 'Repetición desactivada';
+      btn.querySelector('div strong').textContent = label;
+    }
+
+    function abrirMenuOpcionesReproductor() {
+      cerrarMenuOpcionesReproductor();
+
+      playerOptionsOverlay = document.createElement('div');
+      playerOptionsOverlay.className = 'player-options-overlay';
+      playerOptionsOverlay.innerHTML = `
+        <div class="player-options-menu">
+          <h4>Opciones del reproductor</h4>
+          <div class="player-options-grid">
+            <button class="player-option-btn" data-action="repeat"><span>🔁</span><div><strong>Repetición</strong><small>Activa o desactiva bucle</small></div></button>
+            <button class="player-option-btn" data-action="sleep"><span>⏰</span><div><strong>Temporizador</strong><small>Define minutos para detener</small></div></button>
+            <button class="player-option-btn" data-action="voice"><span>🔊</span><div><strong>Cambiar voz</strong><small>Selecciona una voz diferente</small></div></button>
+            <button class="player-option-btn" data-action="text"><span>🖊️</span><div><strong>Texto</strong><small>Ajusta tamaño y resalto</small></div></button>
+            <button class="player-option-btn" data-action="restart"><span>⏮️</span><div><strong>Reiniciar</strong><small>Volver al inicio</small></div></button>
+            <button class="player-option-btn" data-action="stop"><span>⏹️</span><div><strong>Detener</strong><small>Pausar la reproducción</small></div></button>
+          </div>
+        </div>
+      `;
+
+      playerOptionsOverlay.addEventListener('click', (event) => {
+        if (event.target === playerOptionsOverlay) cerrarMenuOpcionesReproductor();
+      });
+
+      playerOptionsOverlay.querySelectorAll('.player-option-btn').forEach((btn) => {
+        const action = btn.dataset.action;
+        if (action === 'repeat') actualizarEstadoRepeatBtn(btn);
+        btn.addEventListener('click', () => {
+          if (action === 'repeat') {
+            repeatPlayback = !repeatPlayback;
+            actualizarEstadoRepeatBtn(btn);
+            aiBtn?.classList.toggle('active', repeatPlayback);
+          }
+          if (action === 'sleep') {
+            mostrarPopupInput('Temporizador', 'Minutos para detener reproducción', (valor) => {
+              const minutos = Number(valor);
+              if (minutos) setTimeout(detenerLectura, minutos * 60000);
+            });
+          }
+          if (action === 'voice') {
+            renderVoices();
+            openModal(voiceModal);
+          }
+          if (action === 'text') {
+            openTextConfigPanel();
+            sizeBtn?.classList.add('active');
+            setTimeout(() => sizeBtn?.classList.remove('active'), 350);
+          }
+          if (action === 'restart') {
+            iniciarLectura(0);
+          }
+          if (action === 'stop') {
+            detenerLectura();
+            savedPlaybackPosition = 0;
+          }
+          cerrarMenuOpcionesReproductor();
+        });
+      });
+
+      document.body.appendChild(playerOptionsOverlay);
+    }
+
+    optionsBtn?.addEventListener('click', abrirMenuOpcionesReproductor);
 
     fontSizeSlider?.addEventListener('input', (e) => {
       textConfig.fontSize = Number(e.target.value);
@@ -7078,7 +7214,45 @@
 
     bindCardEvents();
 
-    fab.addEventListener('click', () => handleAction('texto'));
+    function cerrarMenuAccionesRapidas() {
+      if (quickActionsOverlay) {
+        quickActionsOverlay.remove();
+        quickActionsOverlay = null;
+      }
+    }
+
+    function abrirMenuAccionesRapidas() {
+      cerrarMenuAccionesRapidas();
+      quickActionsOverlay = document.createElement('div');
+      quickActionsOverlay.className = 'quick-actions-overlay';
+      quickActionsOverlay.innerHTML = `
+        <div class="quick-actions-menu">
+          <h4>Acciones rápidas</h4>
+          <div class="quick-actions-grid">
+            <button class="quick-action-btn" data-action="archivo"><span>📄</span><div><strong>Documento</strong><small>Sube archivos desde tu dispositivo</small></div></button>
+            <button class="quick-action-btn" data-action="escanear"><span>📷</span><div><strong>Escanear texto</strong><small>Importa imágenes y usa OCR</small></div></button>
+            <button class="quick-action-btn" data-action="texto"><span>✏️</span><div><strong>Texto rápido</strong><small>Escribe o pega un texto</small></div></button>
+            <button class="quick-action-btn" data-action="url"><span>🔗</span><div><strong>Enlace web</strong><small>Convierte una URL en audio</small></div></button>
+          </div>
+        </div>
+      `;
+
+      quickActionsOverlay.addEventListener('click', (event) => {
+        if (event.target === quickActionsOverlay) cerrarMenuAccionesRapidas();
+      });
+
+      quickActionsOverlay.querySelectorAll('.quick-action-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          cerrarMenuAccionesRapidas();
+          handleAction(action);
+        });
+      });
+
+      document.body.appendChild(quickActionsOverlay);
+    }
+
+    fab.addEventListener('click', abrirMenuAccionesRapidas);
 
     function abrirSelectorArchivos() {
       toggleOverlay(true);
@@ -7086,6 +7260,12 @@
     }
 
     function abrirSelectorArchivoLocalDirecto() {
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+        return;
+      }
+
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.pdf,.doc,.docx,.txt';
@@ -7098,6 +7278,12 @@
     }
 
     function abrirSelectorImagenLocalDirecto() {
+      if (imageInput) {
+        imageInput.value = '';
+        imageInput.click();
+        return;
+      }
+
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
