@@ -1162,6 +1162,96 @@
       .text-container { font-size: 16px; max-height: 280px; }
       .text-config-panel { left: 12px; right: 12px; width: auto; top: 64px; }
     }
+
+    /* --- Estética dedicada a móviles --- */
+    @media (max-width: 768px) {
+      body.mobile-redesign {
+        background: radial-gradient(circle at 20% 20%, rgba(255, 184, 0, 0.08), transparent 34%),
+                    radial-gradient(circle at 80% 0%, rgba(255, 149, 0, 0.08), transparent 32%),
+                    #FFF7EF;
+        color: var(--texto-negro);
+      }
+
+      body.mobile-redesign #app {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 12px;
+      }
+
+      body.mobile-redesign .library-header,
+      body.mobile-redesign .player-body,
+      body.mobile-redesign .settings-page,
+      body.mobile-redesign .access-cards,
+      body.mobile-redesign .document-list {
+        background: rgba(255, 255, 255, 0.96);
+        border-radius: 20px;
+        border: 1px solid #FFE0B2;
+        box-shadow: 0 14px 30px rgba(255, 149, 0, 0.12);
+        padding: 14px;
+        gap: 12px;
+      }
+
+      body.mobile-redesign .promo-banner {
+        height: auto;
+        padding: 18px 16px 22px;
+        border-radius: 24px;
+        background: linear-gradient(145deg, #FFF8EF, #FFEAD6);
+        box-shadow: 0 16px 32px rgba(255, 149, 0, 0.16);
+      }
+
+      body.mobile-redesign .access-cards,
+      body.mobile-redesign .document-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      }
+
+      body.mobile-redesign .tarjeta-acceso,
+      body.mobile-redesign .documento-item {
+        background: #FFFDF9;
+        border: 1px solid #FFE0B2;
+        border-radius: 18px;
+        box-shadow: inset 0 0 0 1px rgba(255, 184, 0, 0.12), 0 10px 20px rgba(0,0,0,0.05);
+      }
+
+      body.mobile-redesign .player-body {
+        display: flex;
+        flex-direction: column;
+      }
+
+      body.mobile-redesign .text-container {
+        max-height: none;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #FFFFFF, #FFF6E6);
+      }
+
+      body.mobile-redesign .bottom-nav {
+        height: 76px;
+        border-radius: 22px 22px 0 0;
+        padding: 6px 6px 10px;
+        backdrop-filter: blur(18px);
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #FFE0B2;
+        gap: 4px;
+      }
+
+      body.mobile-redesign .nav-item {
+        color: #7a7a7a;
+        font-weight: 700;
+      }
+
+      body.mobile-redesign .nav-item.active {
+        color: var(--naranja-botones);
+      }
+
+      body.mobile-redesign .fab {
+        width: 70px;
+        height: 70px;
+        right: 18px;
+        bottom: 104px;
+        box-shadow: 0 20px 36px rgba(255, 149, 0, 0.32);
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -7780,6 +7870,19 @@
       updateUITranslations(currentLanguage);
       console.log('✅ Idioma inicializado:', currentLanguage);
     });
+  </script>
+  <script>
+    // Tema móvil dedicado: aplica una estética propia en pantallas pequeñas manteniendo coherencia cromática
+    (function() {
+      const body = document.body;
+      const mq = window.matchMedia('(max-width: 768px)');
+      const toggleMobileTheme = () => {
+        body.classList.toggle('mobile-redesign', mq.matches);
+      };
+
+      toggleMobileTheme();
+      mq.addEventListener('change', toggleMobileTheme);
+    })();
   </script>
 </body>
 </html>
