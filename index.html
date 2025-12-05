@@ -1293,6 +1293,40 @@
         padding: 12px;
       }
 
+      body.mobile-redesign .page {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #FFE0B2;
+        border-radius: 22px;
+        box-shadow: 0 12px 28px rgba(255, 149, 0, 0.14);
+        padding: 14px;
+        backdrop-filter: blur(12px);
+      }
+
+      body.mobile-redesign #auth-screen {
+        padding: 26px 14px 18px;
+        background: radial-gradient(circle at 0% 0%, rgba(255, 184, 0, 0.12), transparent 38%),
+                    radial-gradient(circle at 90% 10%, rgba(255, 149, 0, 0.08), transparent 36%),
+                    var(--fondo-rosa-pastel);
+      }
+
+      body.mobile-redesign .auth-card {
+        border: 1px solid #FFE0B2;
+        box-shadow: 0 14px 32px rgba(255, 149, 0, 0.16);
+        gap: 18px;
+        padding: 24px;
+      }
+
+      body.mobile-redesign .auth-form input[type="email"],
+      body.mobile-redesign .auth-form input[type="password"] {
+        background: #FFF7EF;
+        border-color: #FFDFA8;
+      }
+
+      body.mobile-redesign .auth-button {
+        box-shadow: 0 10px 24px rgba(255, 149, 0, 0.22);
+        border-radius: 16px;
+      }
+
       body.mobile-redesign .library-header,
       body.mobile-redesign .player-body,
       body.mobile-redesign .settings-page,
@@ -1320,12 +1354,27 @@
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       }
 
+      body.mobile-redesign .section-header h2 {
+        font-size: 20px;
+        margin: 4px 0 10px;
+      }
+
       body.mobile-redesign .tarjeta-acceso,
       body.mobile-redesign .documento-item {
         background: #FFFDF9;
         border: 1px solid #FFE0B2;
         border-radius: 18px;
         box-shadow: inset 0 0 0 1px rgba(255, 184, 0, 0.12), 0 10px 20px rgba(0,0,0,0.05);
+      }
+
+      body.mobile-redesign .tarjeta-acceso h3,
+      body.mobile-redesign .documento-item h3 {
+        font-size: 15px;
+      }
+
+      body.mobile-redesign .documento-item .meta {
+        font-size: 12px;
+        color: #8a7a5d;
       }
 
       body.mobile-redesign .player-body {
@@ -1336,7 +1385,30 @@
       body.mobile-redesign .text-container {
         max-height: none;
         border-radius: 16px;
-        background: linear-gradient(180deg, #FFFFFF, #FFF6E6);
+        background: linear-gradient(180deg, rgba(255, 248, 239, 0.9), #fff);
+        box-shadow: inset 0 0 0 1px #FFE0B2;
+      }
+
+      body.mobile-redesign .mobile-player-header {
+        background: linear-gradient(165deg, rgba(255, 247, 236, 0.95), rgba(255, 235, 210, 0.95));
+        border: 1px solid #FFE0B2;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.06);
+      }
+
+      body.mobile-redesign .mobile-control-stack {
+        border: 1px solid #FFE0B2;
+        box-shadow: 0 10px 20px rgba(255, 149, 0, 0.14);
+      }
+
+      body.mobile-redesign .pill-action,
+      body.mobile-redesign .mobile-cta {
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+      }
+
+      body.mobile-redesign .pill-action:active,
+      body.mobile-redesign .mobile-cta:active {
+        transform: translateY(1px) scale(0.99);
+        box-shadow: 0 10px 24px rgba(255, 149, 0, 0.18);
       }
 
       body.mobile-redesign .bottom-nav {
@@ -1350,7 +1422,7 @@
       }
 
       body.mobile-redesign .nav-item {
-        color: #7a7a7a;
+        color: #7a6b54;
         font-weight: 700;
       }
 
@@ -1364,6 +1436,23 @@
         right: 18px;
         bottom: 104px;
         box-shadow: 0 20px 36px rgba(255, 149, 0, 0.32);
+      }
+
+      body.mobile-redesign .quick-actions-menu,
+      body.mobile-redesign .player-options-menu,
+      body.mobile-redesign .modal-documento,
+      body.mobile-redesign .modal-voz,
+      body.mobile-redesign .modal-velocidad,
+      body.mobile-redesign .modal-idioma,
+      body.mobile-redesign .formulario-solicitud {
+        border-radius: 24px;
+        border: 1px solid #FFE0B2;
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
+      }
+
+      body.mobile-redesign .popup-toast {
+        border: 2px solid #FFE0B2;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
       }
     }
   </style>
