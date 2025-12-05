@@ -40,6 +40,31 @@
     body { background: var(--fondo-rosa-pastel); color: var(--texto-negro); }
     #app { min-height: 100vh; padding-bottom: 80px; display: none; }
 
+    .skip-link {
+      position: absolute;
+      top: -80px;
+      left: 16px;
+      padding: 12px 16px;
+      background: #1A1A1A;
+      color: #fff;
+      border-radius: 10px;
+      z-index: 200;
+      text-decoration: none;
+      font-weight: 700;
+      transition: top 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .skip-link:focus-visible {
+      top: 16px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+      outline: 3px solid var(--amarillo-principal);
+    }
+
+    button:focus-visible, .nav-item:focus-visible, .tarjeta-acceso:focus-visible {
+      outline: 3px solid var(--amarillo-principal);
+      outline-offset: 2px;
+    }
+
     .page { display: none; padding: 16px; }
     .page.active { display: block; }
 
@@ -1022,7 +1047,22 @@
     #ocr-status { font-size: 15px; color: #666; margin-bottom: 4px; }
     #ocr-percent { font-size: 32px; font-weight: 700; color: #FFB800; }
 
+    /* --- Preferencias de movimiento --- */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+
     /* --- Responsive --- */
+    @media (max-width: 600px) {
+      .page { padding: 12px; }
+      .library-header { flex-wrap: wrap; gap: 8px; }
+      .documento-item { align-items: flex-start; gap: 10px; }
+      .documento-item .meta { flex-wrap: wrap; }
+      .access-cards { gap: 10px; }
+      .bottom-nav { height: 68px; }
+      .nav-item { font-size: 13px; }
+    }
+
     @media (min-width: 769px) {
       #app { max-width: 1200px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
       #main-content { order: 1; }
@@ -1062,6 +1102,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
   <div id="auth-screen">
     <div class="auth-card">
       <div class="auth-logo">AI</div>
@@ -1125,7 +1166,7 @@
     </div>
   </div>
   <div id="app">
-    <main id="main-content">
+    <main id="main-content" role="main" tabindex="-1">
       <section id="home" class="page active">
         <div class="promo-banner">
           <svg class="promo-illustration" viewBox="0 0 320 180">
@@ -1166,35 +1207,35 @@
           <h2>¿Qué quieres escuchar hoy?</h2>
         </div>
         <div class="access-cards">
-          <div class="tarjeta-acceso" data-action="archivo">
+          <div class="tarjeta-acceso" data-action="archivo" role="button" tabindex="0" aria-label="Subir un documento">
             <div class="icon-card">📄</div>
             <div>
               <h3>Documento</h3>
               <p>Sube archivos desde Drive o dispositivo</p>
             </div>
           </div>
-          <div class="tarjeta-acceso" data-action="escanear">
+          <div class="tarjeta-acceso" data-action="escanear" role="button" tabindex="0" aria-label="Escanear texto desde imágenes o documentos">
             <div class="icon-card">{ }</div>
             <div>
               <h3>Escanear Texto</h3>
               <p>Documentos escaneados o imágenes</p>
             </div>
           </div>
-          <div class="tarjeta-acceso" data-action="url">
+          <div class="tarjeta-acceso" data-action="url" role="button" tabindex="0" aria-label="Convertir una URL en audio">
             <div class="icon-card">🔗</div>
             <div>
               <h3>Enlace Web</h3>
               <p>Convierte URLs en audio</p>
             </div>
           </div>
-          <div class="tarjeta-acceso" data-action="texto">
+          <div class="tarjeta-acceso" data-action="texto" role="button" tabindex="0" aria-label="Escribir o pegar texto para escucharlo">
             <div class="icon-card">T</div>
             <div>
               <h3>Escribir o Pegar Texto</h3>
               <p>Introduce o pega texto para escuchar</p>
             </div>
           </div>
-          <div class="tarjeta-acceso" data-action="correo">
+          <div class="tarjeta-acceso" data-action="correo" role="button" tabindex="0" aria-label="Escuchar correos electrónicos">
             <div class="icon-card">✉️</div>
             <div>
               <h3>Correo</h3>
@@ -1274,22 +1315,22 @@
       </section>
     </main>
 
-    <nav class="bottom-nav">
-      <button class="nav-item active" data-target="home">
+    <nav class="bottom-nav" role="navigation" aria-label="Navegación principal">
+      <button class="nav-item active" data-target="home" aria-label="Ir a inicio">
         <div class="icon">🏠</div>
         <span>Inicio</span>
       </button>
-      <button class="nav-item" data-target="library">
+      <button class="nav-item" data-target="library" aria-label="Ir a la biblioteca">
         <div class="icon">📄</div>
         <span>Mi Biblioteca</span>
       </button>
-      <button class="nav-item" data-target="settings">
+      <button class="nav-item" data-target="settings" aria-label="Ir a configuraciones">
         <div class="icon">⚙️</div>
         <span>Configuraciones</span>
       </button>
     </nav>
 
-    <button class="fab" id="add-btn">+</button>
+    <button class="fab" id="add-btn" aria-label="Agregar nuevo contenido">+</button>
 
       <section id="settings" class="page">
         <div class="settings-page">
